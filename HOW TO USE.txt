@@ -1,0 +1,105 @@
+# Colossal Macro - How to use
+Grind macro for Attack on Titan Revolution (Roblox). Four routines: Blood Awakening, Shiki, Universal and Female Raid.
+===========================================================================
+
+## The window
+A sidebar on the left: Dashboard (live run, timer, stats, activity log), Runs, Analytics (graph), Loot and All-time stats; at the bottom Appearance, Settings and the Guide. Appearance: pick a theme (Midnight, Graphite, Ocean, Forest, Crimson, Light) and any accent colour (presets or Custom...). It changes right away and is saved.
+
+## Quick start
+1. Open Colossal Macro.exe. (Windows may say "Windows protected your PC" the first time - click More info > Run anyway. It does that for any new app that isn't signed.)
+2. Pick your routine at the top of the window.
+3. First time only: open Settings > Keybinds and check the game keys match yours. Press Save.
+4. Start a mission (or the Female Raid) in Roblox.
+5. Press F8 (or the Start button) and click into Roblox. The macro waits for the mission and then plays it, clicks RETRY at the end and keeps going.
+6. Leave the mouse and keyboard alone while it runs. A small status bar sits at the top of the screen.
+7. F6 = pause / resume. F7 = stop. Moving the mouse into the top-left corner of the screen also stops it.
+
+If you press F8 while the macro is waiting, it starts the routine right away (handy if the start icon isn't seen).
+
+## The routines
+Every mission routine waits for your ability 2 icon (the yellow speedometer) to show - that means the mission started. Then:
+- Blood Awakening (Colossal): ability 2, dash 8.2s, strafe left (double-tap A) 8s, spam ability 5 to shift, wait 17s, spam the shifted ability 4 for 8s, then ability 5 every second while walking right until the mission ends.
+- Shiki: ability 2, dash, one strafe, ability 3, then strafes to buy time until ability 4 is ready (it watches for the ability 4 icon), ability 4, then the same shift as above.
+- Universal (thunder spears): ability 2, dash, one strafe, ability 3, looks down, spams ability 4 for 3.5s, then the same shift as above.
+- Female Raid: starts when the skip button (or the raid start picture) shows. It spams the skip key on every skip button, uses buffs (abilities 1, 3, 5), shifts, then cycles abilities 4 > 3 > 2. After the 3rd skip it watches for the heatwave and spams ability 1 while it shows. At the end it opens the chests, clicks finish, then retry.
+
+Every timing can be changed in Settings > Timings (Shared = used by all routines, plus one page per routine). Every value has a short explanation, and each page has a reset button.
+
+## Before you start (one time)
+- Windows 10 or 11.
+- Roblox windowed or fullscreen both work. Keep it on your main screen, or pick the right screen in Settings > App.
+- Windowed: the macro watches only the Roblox window (the log says "Roblox is windowed"), so other windows on the screen can't confuse it, and the failsafe clicks land inside the game. The game's buttons can be drawn smaller or bigger in a window, so the macro learns the size of your start icon and retry button by itself on the first mission (the log says "matched at size x..."). If you move the window it follows it; if you resize it, it learns the sizes again. If something still isn't seen, capture your own pictures (see below).
+- Default keys the macro presses: 1, 2, 3, 4, 5, Space (dash), A / D (strafe / move), Ctrl (shift lock), E (skip, raid only). Change them in Settings > Keybinds if yours are different.
+- Blood Awakening skill bar: human key 2 = the yellow speedometer ability, key 5 = Shift. Colossal: key 2 = eject (only used by the failsafe), key 4 = your big Colossal attack, key 5 = stomp.
+- Female Raid: open Settings > Timings > Female Raid and press Pick next to Chest 1 (and Chest 2 if "Open chest 2" is on), then click where the chest is on the end-of-raid screen. The raid can't open chests without this.
+
+## Build tips
+- Blood Awakening: Blood Awakening memory (must). Perks Warchief or Stormwrath, Immortal, Founder's Blessing or Avatar of Ymir, Munition Masters. Artifacts Colossal Scars and Cloak with Shifter Dmg%. Any family (Shiki for luck, Fritz for extra gems).
+- Shiki: Shiki family. Perks Kengo or Godforged, Immortal, Founder's Blessing or Avatar of Ymir, Munition Masters (Godforged or Avatar of Ymir is required). Memories Apotheosis and Afterimages. Artifacts with TS Dmg%.
+- Universal: Fritz > Reiss > any family. Same perks and memories as Shiki. Artifacts with TS Dmg%.
+- Female Raid: Fritz family. Perks Stormwrath, Avatar of Ymir, 15th Commander, Immortal, Font of Inspiration. Memories Blood Awakening, Divine Decree, Sparks of Black, Shatterpoint, Elementalist or Tactician. Artifacts Colossal Scars and Scorched Cloak with Shifter Dmg%.
+- For every routine avoid the perks Adaptation, Tatsujin and Wings of Freedom, and the Flashsteps memory.
+
+## Going fast (30 second missions)
+- Runs tab (main window): every run's time, result and loot, plus a bar chart of how long each step of the last run took - so you can see exactly where the time goes. The big timer in the "Now" card counts the current run (tenths of a second); Best and Avg sit under it. Your best time per routine is saved, and Discord messages say NEW BEST when you beat it.
+- Speed preset: Settings > Timings > Blood Awakening (or Shiki / Universal) > "Load speed preset", then Save. It turns on Fast mode, the Smart shift wait and "Stop ability 4 spam once used", and trims dead waits (after ability 2: 0.7s, before the last ability 5: 1s, after retry: 3s). Dash and strafe times are not changed by the preset - use the Speed finder for those. "Load defaults" puts everything back.
+- Smart shift wait: instead of always waiting 22s for the shift (5s of ability 5 + 17s), the macro watches your skill bar and goes on the moment the Colossal bar shows. The Colossal bar is built in, and during your first run the macro saves its own picture of your bar (the log says "Auto-learn: saved your 'Shifted' picture"). Nothing to set up. If the shift is never seen, it waits no longer than the normal 22s.
+- Stop ability 4 spam once used: the shifted ability 4 used to be spammed for a fixed 8s. Now the macro watches the ability 4 icon on the titan bar and moves on to ability 5 as soon as the icon dims (the attack went off). Ability 5's loop still taps ability 4 every 2s for 8s, just in case. If the icon isn't found it spams the full 8s like before.
+- Speed finder (Settings > Timings > Blood Awakening): tests shorter dash and strafe times for you. It times 3 runs with your current settings, then tries Strafe left time 1s shorter for 3 runs, keeps it only if those runs really finished faster (and none needed the failsafe), and keeps going; then the same for Dash spam time. The log tells you what it is trying. When nothing faster is left it turns itself off. Leave it running while you AFK.
+- Retry is clicked the moment it's seen. The result and loot are read afterwards (from the screenshot taken when retry was seen, plus a few taken while clicking), while the next mission loads.
+- What Fast mode does NOT do: it doesn't shorten the mission itself - only the timings do. It makes retry and the next start react quicker (checks every 0.1s, no second look) and reads the loot from one screenshot only, so loot that fades in late can be missed.
+- After the retry click the macro goes on as soon as the end screen is gone (1s at least), instead of always waiting 7s. If retry is still showing after 3s it clicks it again.
+
+## Running it for hours / overnight
+- The macro now looks at small parts of the screen where it last saw the RETRY button and the start icon, instead of photographing the whole screen many times a second. It uses about 4-8% of one CPU core (it was 14-25%, and 50%+ in Fast mode).
+- Roblox itself is the big load. For long sessions lower the Roblox graphics quality and, if your Roblox settings have it, cap the frame rate (e.g. 60 or lower).
+- If the PC switches itself off (no blue screen, it just goes dark), that is the hardware cutting out under load - usually overheating or the power supply. Check temperatures with a tool like HWMonitor, clean dust out of the fans/heatsink, and make sure the power supply is healthy. A PC that does this can do it with any game, not just the macro.
+- After a crash, Documents\Colossal Macro\previous_session_log.txt has the log of the session before (last_session_log.txt is the current one).
+- Session limits (Settings > App): "Stop after this many runs" and/or "Stop after this many hours" (0 = no limit). When a limit is reached the macro stops at the end of that run - it leaves the end screen as it is and doesn't click retry - and, if you turn it on, closes Roblox too. Discord gets a message when it stops this way. Good for giving the PC a rest overnight.
+
+## Stats graph
+- Graph tab (main window): missions per hour (completed / failed / result not read) and the average mission time per hour, for the last 24 hours of the routine you picked. "Save picture" saves the full report and opens it; "Send to Discord" posts it.
+- The full report also has loot per hour and the totals: missions, completed, failed, success rate, missions per hour, average and best time, failsafes, loot, and this session.
+- Discord: turn on "Stats graph every hour while it runs" in Settings > Discord, press "Send stats graph", or type !graph (bot mode).
+- Every finished run is written to Documents\Colossal Macro\runs.csv (time, routine, seconds, result, loot, failsafe) - the graph is drawn from it, so it survives a crash or a restart, and you can open it in Excel. Runs older than 14 days are dropped once the file gets big.
+
+## Loot and win/loss tracking
+On every end screen the macro reads whether the run was Completed or Failed and which loot icons show (scrolls or vessels, body / defence / offence / support fragments, serums). The main window shows this session and the all-time totals; Settings > App can reset them.
+- Each loot icon on the end screen counts as one.
+- If your end screen is a bit bigger or smaller than 1080p (the macro learns this from the size the RETRY button was found at), the result title and loot are looked for at that size too.
+- Completed / Failed never counted? When a result can't be read, the macro saves that end screen (last_end_screen.png) and after 3 in a row the log tells you. Then: Settings > Pictures > Results > "End screen" next to Completed (or Failed) - your last end screen opens full screen, and you drag a box around the title. No rush to switch to Roblox. The same "End screen" button is there for loot pictures.
+- There is no built-in picture for the Attack serum: capture one in Settings > Pictures (on an end screen that shows it) to count it.
+- It's read after the retry click, so it doesn't slow anything down. Turn it off in Settings > App if you don't want it.
+
+## Discord
+Settings > Discord. Choose Webhook (messages only) or Bot (messages + commands).
+- Webhook: in your server, Server Settings > Integrations > Webhooks > New Webhook > Copy Webhook URL, paste it in.
+- Bot: discord.com/developers > New Application > Bot: Reset Token (copy it) and turn on MESSAGE CONTENT INTENT. OAuth2 > URL Generator: scope "bot" with View Channel, Send Messages, Read Message History and Attach Files, open the link and add it to your server. Then paste the token and the channel ID (Discord Settings > Advanced > Developer Mode on, right-click the channel > Copy Channel ID).
+- Your user ID (right-click yourself > Copy User ID) is needed for pings and for bot commands - only those IDs can control the macro.
+- Messages: one after every run (result, loot, time, optional screenshot), and alerts for the failsafe, a rejoin, or an error stop.
+- Bot commands (type them in that channel): !start !pause !resume !stop !reconnect !screenshot !stats !graph !status !help
+- Press "Send test message" to check it works. The bot token is saved in config.json on your PC - don't share that file.
+
+## Auto-reconnect
+Settings > Reconnect. When Roblox shows its Disconnected message, the failsafe has been running for 2 minutes, or the bot gets !reconnect, the macro closes Roblox, launches AOTR again and clicks through the lobby by itself. One-time setup:
+1. Capture 3 pictures: the Disconnected message, something that only shows once the game has loaded (like the slot Select button), and the Play button in the lobby.
+2. Pick the click spots: Pick a slot, Click play, Choose lobby, Click play (lobby), then for Missions: Click missions, Pick outskirts, Create, Play (and for Raids: Click Raids, Pick female raid, Create, Play).
+3. Turn it on, Save, then Stop and Start the macro. The status line tells you what's still missing. "Rejoin now (test)" tries it while the macro runs.
+
+## If something doesn't work
+- Mission never starts: the macro can't see your ability 2 icon. Go to Settings > Pictures, press Capture next to "Mission start icon", switch to Roblox within 3 seconds (in a mission, human form) and drag a box around the yellow speedometer icon.
+- Retry is never clicked: on the end screen of a mission, Settings > Pictures > Capture next to "Retry button", switch to Roblox, drag a tight box around the word RETRY.
+- Raid problems: capture your own Skip button, Finish button or Heatwave pictures in Settings > Pictures.
+- Smart shift never sees the shift (the log keeps saying "Shift picture not seen" or "Auto-learn: not saving"): while shifted into the Colossal, Settings > Pictures > Smart waits > Capture "Shifted (titan bar)" and drag a box around the titan icon that sits where your speedometer was.
+- Use "Test detection now" in Settings > Pictures to see what the macro can see right now (switch to Roblox within 3 seconds).
+- Pictures that come with the app were made on a 1920x1080 screen with normal graphics. Other screen sizes are scaled automatically, but if you use very low graphics or an odd screen size, capturing your own pictures fixes it.
+- Keys go to the wrong window: leave "Bring Roblox to the front" on (Settings > App), or click into Roblox after pressing Start.
+- Stuck missions: after 120 seconds the failsafe spams ability 2 (eject), waits, then clicks the screen until the retry button shows up. Change the time or the click spot in Settings > Failsafe. The Female Raid has its own 3 minute limit.
+- Something odd happened: Documents\Colossal Macro\last_session_log.txt has everything the macro did.
+
+## Sharing with friends
+Just send them Colossal Macro.exe. Nothing to install. Each person's settings, pictures and stats are saved in Documents\Colossal Macro (config.json, pictures, last_session_log.txt).
+
+## Good to know
+- The macro only presses keys and clicks - it doesn't touch the game files. Macros may still be against a game's rules, so use it at your own risk.
+- If your antivirus flags the exe, that's a common false alarm for apps packed with PyInstaller.

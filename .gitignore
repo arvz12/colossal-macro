@@ -1,0 +1,21 @@
+# build output
+dist/
+build/
+*.spec
+__pycache__/
+*.pyc
+
+# never publish secrets or personal data
+.env
+.env.*
+*.env
+*.key
+*.pem
+secrets*
+config.json
+*.log
+runs.csv
+last_end_screen*
+last_session_log.txt
+previous_session_log.txt
+pictures/
