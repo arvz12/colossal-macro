@@ -878,9 +878,9 @@ PICTURES = {
     "start": _pic("Mission start icon", "Detection", {"normal": "mission_start.png", "low": "low/mission_start.png"}, 0.80,
                   "Your ability 2 icon (the yellow speedometer) on the skill bar, in a mission in human form. "
                   "A mission starts when the macro sees it."),
-    "start_rage": _pic("Mission start icon (Order: Rage)", "Detection", {}, 0.80,
-                       "Universal with the Rage preset only: your Order: Rage icon on key 2, in a mission in human "
-                       "form. Capture it once - the mission starts when the macro sees it."),
+    "start_rage": _pic("Mission start icon (Order: Rage)", "Detection", {"normal": "start_rage.png"}, 0.75,
+                       "Universal with the Rage preset only: your Order: Rage icon (the burning dagger) on key 2, in a "
+                       "mission in human form. Built in - the mission starts when the macro sees it."),
     "retry": _pic("Retry button", "Detection", {"normal": "retry_text.png", "low": "low/retry_text.png"}, 0.90,
                   "The word RETRY on the end screen. Drag the box tightly around the word."),
     "retry_alt": _pic("Retry button with counter", "Detection", {"normal": "alt_retry_button.png"}, 0.85,
@@ -935,6 +935,7 @@ LOOT_SHORT = {"scroll": "Scrolls", "vessel": "Vessels", "body": "Body", "defence
               "beast_serum": "Beast", "colossal_serum": "Colossal"}
 RETRY_SCALES = (0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2, 1.3)  # windowed games can be smaller
 START_SCALES = RETRY_SCALES
+SCALE_OF = {"retry": "retry_scale", "retry_alt": "retry_scale", "start": "start_scale", "start_rage": "rage_scale"}
 
 
 def loot_kinds_for(raid):
@@ -1282,6 +1283,8 @@ class Detector:
         self.retry_scans = 0
         self.start_scale = cfg.get("start_scale")
         self.start_scans = 0
+        self.rage_scale = cfg.get("rage_scale")
+        self.rage_scans = 0
         self.checks = {}
         self._grab_failed = False
         self.grabber = ScreenGrabber(self.mon)
@@ -1421,41 +1424,51 @@ class Detector:
         shot = self.grab()
         if shot is None:
             return None
-        if key != "start":
+        if key not in ("start", "start_rage"):
             return self.find(key, shot, threshold=threshold)
-        m = self.find(key, shot, self.start_scales(), threshold=threshold)
-        if m and (self.start_scale is None or abs(m.scale - self.start_scale) > 0.001):
+        name = "rage_scale" if key == "start_rage" else "start_scale"
+        learned = getattr(self, name)
+        m = self.find(key, shot, self.start_scales(key), threshold=threshold)
+        if m and (learned is None or abs(m.scale - learned) > 0.001):
             # A new size: the first one that passes may be a step off - keep the best nearby size.
             near = [round(m.scale + d_, 3) for d_ in (-0.05, -0.025, 0.025, 0.05)]
             better = self.best_any(key, shot, near)
             if better and better.score > m.score:
                 m = better
                 self.hints[key] = (m.scale, m.cx - m.w / 2.0, m.cy - m.h / 2.0)
-            self.start_scale = m.scale
-            self.cfg["start_scale"] = m.scale
-            self.log("Mission start icon matched at size x%.2f (score %.2f) - remembered" % (m.scale, m.score))
+            setattr(self, name, m.scale)
+            self.cfg[name] = m.scale
+            self.log("%s matched at size x%.2f (score %.2f) - remembered" % (PICTURES[key]["label"], m.scale, m.score))
             if self.save_cb:
                 self.save_cb()
         return m
 
-    def start_scales(self):
-        """Sizes to try for the start icon: the remembered one (now and then another), or 1.0 and the others in
-        turn until it has been seen - a windowed game can draw its skill bar smaller or bigger."""
-        self.start_scans += 1
-        n = self.start_scans
-        if self.start_scale is not None:
-            out = [self.start_scale]
+    def start_scales(self, key="start"):
+        """Sizes to try for a start icon: the remembered one (now and then another), or a first guess and the
+        others in turn until it has been seen - a windowed game can draw its skill bar smaller or bigger."""
+        rage = key == "start_rage"
+        if rage:
+            self.rage_scans += 1
+            n, learned = self.rage_scans, self.rage_scale
+        else:
+            self.start_scans += 1
+            n, learned = self.start_scans, self.start_scale
+        if learned is not None:
+            out = [learned]
             if n % 16 == 0:
-                others = [s for s in START_SCALES if abs(s - self.start_scale) > 0.001]
+                others = [s for s in START_SCALES if abs(s - learned) > 0.001]
                 out.append(others[(n // 16) % len(others)])
             return out
-        others = [s for s in START_SCALES if s != 1.0]
-        return [1.0] if n % 2 else [1.0, others[(n // 2) % len(others)]]
+        first = 1.0
+        if rage and self.start_scale is not None and self.pics(key) and not self.own.get(key):
+            first = self.start_scale  # the built-in Order: Rage icon sits on the same skill bar as the speedometer
+        others = [s for s in START_SCALES if abs(s - first) > 0.001]
+        return [first] if n % 2 else [first, others[(n // 2) % len(others)]]
 
     def titan_scales(self):
         """Sizes for the titan bar icons: around the size the speedometer was seen at."""
-        hint = self.hints.get("start")
-        base = hint[0] if hint else (self.start_scale or 1.0)
+        hint = self.hints.get("start") or self.hints.get("start_rage")
+        base = hint[0] if hint else (self.start_scale or self.rage_scale or 1.0)
         return tuple(round(base * s, 3) for s in TITAN_SCALES)
 
     def start_keys(self, raid):
@@ -1721,12 +1734,7 @@ FIELDS = {
         Field("Ability 4", "after_ability", "Wait after ability 4", "sec", 0.6, 0, 10, "Pause before the shift sequence starts."),
         Field("Order: Rage", "rage", "Key 2 is Order: Rage", "bool", False,
               help="On (Rage preset): Order: Rage is on key 2 instead of Order: Advance and is pressed at the same "
-                   "moment. The mission start is then spotted by your Order: Rage icon - capture it once in Settings > "
-                   "Pictures (Mission start icon - Order: Rage)."),
-        Field("Thunder spear throws", "spear_throws", "Extra thunder spear throws", "int", 0, 0, 5,
-              help="After the triple thunder spear, this many single thunder spears are thrown (left click). 0 = off."),
-        Field("Thunder spear throws", "throw_interval", "Time between throws", "sec", 0.8, 0.1, 5,
-              "Pause before each throw."),
+                   "moment. The mission start is then spotted by the Order: Rage icon (built in)."),
     ] + _shift_fields(),
     "Female Raid": [
         Field("Chests", "chest1", "Chest 1", "spot", None,
@@ -1858,6 +1866,7 @@ def default_config():
         "reconnect": {"enabled": False, "spots": {}, "click_delay": 2.5, "play_delay": 0.5},
         "retry_scale": None,
         "start_scale": None,
+        "rage_scale": None,
         "stats": {"missions": new_family_stats(), "raids": new_family_stats(), "best": {}},
         "learned": {},  # things the macro worked out by itself (auto-learned picture, Speed finder progress)
     }
@@ -1955,9 +1964,10 @@ def load_config():
         except (TypeError, ValueError):
             pass
 
-    ss_ = saved.get("start_scale")
-    if isinstance(ss_, (int, float)) and 0.5 <= ss_ <= 2:
-        cfg["start_scale"] = float(ss_)
+    for name in ("start_scale", "rage_scale"):
+        ss_ = saved.get(name)
+        if isinstance(ss_, (int, float)) and 0.5 <= ss_ <= 2:
+            cfg[name] = float(ss_)
     rs = saved.get("retry_scale")
     if isinstance(rs, (int, float)) and 0.5 <= rs <= 2:
         cfg["retry_scale"] = float(rs)
@@ -2254,8 +2264,8 @@ ROUTINE_STEPS = {
     "Blood Awakening": ["Ability 2", "Dashing", "Strafe left", "Shift", "Shifted 4", "Ability 5", "Retry"],
     "Shiki": ["Ability 2", "Dashing", "Strafe", "Ability 3", "Buying time", "Ability 4", "Shift", "Shifted 4",
               "Ability 5", "Retry"],
-    "Universal": ["Ability 2", "Dashing", "Strafe", "Ability 3", "Looking down", "Ability 4", "Spear throws", "Shift",
-                  "Shifted 4", "Ability 5", "Retry"],
+    "Universal": ["Ability 2", "Dashing", "Strafe", "Ability 3", "Looking down", "Ability 4", "Shift", "Shifted 4",
+                  "Ability 5", "Retry"],
     "Female Raid": ["Using buffs", "Shifting", "Killing Eren", "Killing Female", "Opening chests", "Retry"],
 }
 SCAN_INTERVAL = 0.5
@@ -2285,6 +2295,8 @@ FINDER_STEP = 1.0               # ...seconds taken off per try
 FINDER_KNOBS = {"strafe": ("Blood Awakening", "strafe_left_time", "Strafe left time", 2.0, "dash"),
                 "dash": ("Shared", "dash_time", "Dash spam time", 3.0, "done")}  # section, key, label, floor, next
 ICON_GONE_TIMEOUT = 20.0
+FOLLOW_WINDOW_EVERY = 3.0      # while waiting for a mission: check the Roblox window's spot this often
+START_HINT_AFTER = 45.0        # no start icon this long -> say once what is being looked for
 RESCAN_RETRY_AFTER = 25.0       # still no mission this long after a retry click -> look for retry again
 GRAB_REPEAT = 1.0
 LOOT_SCAN_TIME = 1.0
@@ -2770,6 +2782,7 @@ class Engine:
         if resized:
             self.cfg["retry_scale"] = None
             self.cfg["start_scale"] = None
+            self.cfg["rage_scale"] = None
             self.out.put(("save",))
         self.det = Detector(self.cfg, self.log, save_cb=lambda: self.out.put(("save",)), mon=region)
         self.log("Roblox window %s - now watching %dx%d" % ("resized" if resized else "moved", region["width"],
@@ -2790,8 +2803,23 @@ class Engine:
             self.log("Waiting for the mission to start")
         waited_from = time.time()
         fast = self.fast()
+        next_follow, hinted = waited_from + FOLLOW_WINDOW_EVERY, False
         while True:
             self.tick(scan=scan_retry or time.time() - waited_from > RESCAN_RETRY_AFTER)
+            now = time.time()
+            if now >= next_follow:
+                # The window can be moved / resized while the next mission loads: keep watching the right spot.
+                next_follow = now + FOLLOW_WINDOW_EVERY
+                try:
+                    self.follow_window()
+                except Exception as e:
+                    self.log("Could not follow the Roblox window (%s)" % e)
+            if not hinted and not self.raid_mode and now - waited_from > START_HINT_AFTER:
+                hinted = True
+                rage = self.routine == "Universal" and self.rt("rage")
+                self.log("Still waiting: the %s isn't showing on key 2 yet. If a mission is already running, check "
+                         "that it is on key 2 and visible (or press %s to start by hand)"
+                         % ("Order: Rage icon" if rage else "ability 2 icon (speedometer)", key_display(self.k("start"))))
             if self.manual_start:
                 self.manual_start = False
                 self.log("Manual start")
@@ -2898,14 +2926,6 @@ class Engine:
                 self.show("Ability 4", "Spamming ability 4 for %gs" % self.rt("ability4_time"))
                 self.log("Ability 4 spam for %gs" % self.rt("ability4_time"))
                 self.spam_key_for(self.k("ability4"), self.rt("ability4_time"), self.rt("ability4_interval"), "ability 4")
-                throws = int(self.rt("spear_throws"))
-                if throws > 0:
-                    self.set_step("Spear throws")
-                    self.log("Throwing %d single thunder spear%s (left click)" % (throws, "" if throws == 1 else "s"))
-                    for i in range(throws):
-                        self.show("Spear throws", "Throw %d of %d" % (i + 1, throws))
-                        self.wait(self.rt("throw_interval"))
-                        mouse_click()
                 self.wait(self.rt("after_ability"))
             else:
                 self.set_step("Buying time")
@@ -3721,7 +3741,11 @@ class Engine:
             self.count("retries")
         if track:
             self.show("Retry clicked" if not stop_reason else "Last run", "Reading the result and loot...")
-            result, found = self.read_end_screen([f for f in [first] + frames if f is not None])
+            try:
+                result, found = self.read_end_screen([f for f in [first] + frames if f is not None])
+            except Exception as e:  # never let reading the loot stop the grind
+                result, found = None, {}
+                self.log("Could not read the end screen (%s: %s) - carrying on" % (type(e).__name__, e))
             if result:
                 self.count(result)
                 self.log("Result: %s" % result.capitalize())
@@ -3951,9 +3975,6 @@ class Engine:
                 self.log("Session limit: stops %s%s" % (" or ".join(lim), ", then closes Roblox"
                                                          if self.cfg["app"].get("close_roblox_at_end") else ""))
             trim_run_log()
-            if (self.routine == "Universal" and self.rt("rage") and not os.path.isfile(own_picture_path("start_rage"))):
-                self.log("Rage preset: capture your Order: Rage icon first (Settings > Pictures > Mission start icon "
-                         "(Order: Rage)) - until then press %s in a mission to start" % key_display(self.k("start")))
             self.reconnect_on = False
             if self.cfg["reconnect"]["enabled"]:
                 missing = reconnect_missing(self.cfg, self.raid_mode)
@@ -4904,9 +4925,7 @@ class SettingsWindow:
                 if sec == "Universal":
                     box2 = self.section(sf.inner, "Universal style",
                                         "Normal: Order: Advance on key 2, meteor then triple thunder spear. Rage: Order: "
-                                        "Rage on key 2 instead (more damage - Avatar of Ymir not needed) and 2 single "
-                                        "thunder spear throws after the triple. Rage needs your Order: Rage picture "
-                                        "(Pictures > Mission start icon - Order: Rage).")
+                                        "Rage on key 2 instead (more damage - Avatar of Ymir not needed), same sequence.")
                     pr2 = tk.Frame(box2, bg=CARD)
                     pr2.pack(anchor="w")
                     Btn(pr2, "Normal preset", lambda: self.load_preset("Universal", "normal")).pack(side="left")
@@ -4985,11 +5004,8 @@ class SettingsWindow:
         if speed in ("rage", "normal"):
             rage = speed == "rage"
             self.set_timing("Universal", "rage", rage)
-            self.set_timing("Universal", "spear_throws", 2 if rage else 0)
-            msg = ("Rage preset loaded: Order: Rage on key 2 + 2 thunder spear throws - press Save" if rage
-                   else "Normal preset loaded: Order: Advance on key 2, no extra throws - press Save")
-            if rage and not os.path.isfile(own_picture_path("start_rage")):
-                msg += ". Then capture your Order: Rage icon (Pictures > Mission start icon - Order: Rage)"
+            msg = ("Rage preset loaded: Order: Rage on key 2 - press Save" if rage
+                   else "Normal preset loaded: Order: Advance on key 2 - press Save")
             self.note(msg, GOOD)
             return
         if speed:
@@ -5123,8 +5139,8 @@ class SettingsWindow:
             return
         os.makedirs(PICTURES_DIR, exist_ok=True)
         img.convert("RGB").save(own_picture_path(key))
-        if key in ("retry", "retry_alt", "start"):
-            self.cfg["retry_scale" if key != "start" else "start_scale"] = None
+        if key in SCALE_OF:
+            self.cfg[SCALE_OF[key]] = None
             save_config(self.cfg)
         if key == "shifted" and self.cfg["learned"].pop("shifted", None) is not None:
             save_config(self.cfg)  # captured by hand now, not learned
@@ -5165,8 +5181,8 @@ class SettingsWindow:
         path = own_picture_path(key)
         if os.path.isfile(path):
             os.remove(path)
-            if key in ("retry", "retry_alt"):
-                self.cfg["retry_scale"] = None
+            if key in SCALE_OF:
+                self.cfg[SCALE_OF[key]] = None
                 save_config(self.cfg)
             if key == "shifted" and self.cfg["learned"].pop("shifted", None) is not None:
                 save_config(self.cfg)  # gone: Auto-learn may save a new one
@@ -5495,6 +5511,7 @@ class SettingsWindow:
         if new_mon != self.cfg["app"]["monitor"]:
             self.cfg["retry_scale"] = None
             self.cfg["start_scale"] = None
+            self.cfg["rage_scale"] = None
         self.cfg["app"]["monitor"] = new_mon
         ok = save_config(self.cfg)
         self.app.discord.restart_bot()
@@ -5657,7 +5674,6 @@ BUILDS = {
         ("Artifacts", "Colossal Scars and Cloak, both with TS Dmg%", False),
         ("Memories", "Apotheosis (required)", True),
         ("Optional", "Afterimages, any legendary memory, or memories that add damage", False),
-        ("One-time setup", "Capture your Order: Rage icon: Settings > Pictures > Mission start icon (Order: Rage)", True),
         ("Avoid", _AVOID, False)]},
     "Female Raid": {"layout": "female", "rows": [
         ("Family", "Fritz", False),
