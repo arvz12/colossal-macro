@@ -30,15 +30,44 @@ Every timing can be changed in Settings > Timings (Shared = used by all routines
 - Roblox windowed or fullscreen both work. Keep it on your main screen, or pick the right screen in Settings > App.
 - Windowed: the macro watches only the Roblox window (the log says "Roblox is windowed"), so other windows on the screen can't confuse it, and the failsafe clicks land inside the game. The game's buttons can be drawn smaller or bigger in a window, so the macro learns the size of your start icon and retry button by itself on the first mission (the log says "matched at size x..."). If you move the window it follows it; if you resize it, it learns the sizes again. If something still isn't seen, capture your own pictures (see below).
 - Default keys the macro presses: 1, 2, 3, 4, 5, Space (dash), A / D (strafe / move), Ctrl (shift lock), E (skip, raid only). Change them in Settings > Keybinds if yours are different.
-- Blood Awakening skill bar: human key 2 = the yellow speedometer ability, key 5 = Shift. Colossal: key 2 = eject (only used by the failsafe), key 4 = your big Colossal attack, key 5 = stomp.
+- Blood Awakening skill bar: human key 2 = the yellow speedometer ability, key 5 = Shift. Colossal: key 2 = eject (only used by the failsafe), key 4 = your big Colossal attack, key 5 = stomp. (Every routine's full build and skill layout picture: Builds and skill layouts, below.)
 - Female Raid: open Settings > Timings > Female Raid and press Pick next to Chest 1 (and Chest 2 if "Open chest 2" is on), then click where the chest is on the end-of-raid screen. The raid can't open chests without this.
 
-## Build tips
-- Blood Awakening: Blood Awakening memory (must). Perks Warchief or Stormwrath, Immortal, Founder's Blessing or Avatar of Ymir, Munition Masters. Artifacts Colossal Scars and Cloak with Shifter Dmg%. Any family (Shiki for luck, Fritz for extra gems).
-- Shiki: Shiki family. Perks Kengo or Godforged, Immortal, Founder's Blessing or Avatar of Ymir, Munition Masters (Godforged or Avatar of Ymir is required). Memories Apotheosis and Afterimages. Artifacts with TS Dmg%.
-- Universal: Fritz > Reiss > any family. Same perks and memories as Shiki. Artifacts with TS Dmg%.
-- Female Raid: Fritz family. Perks Stormwrath, Avatar of Ymir, 15th Commander, Immortal, Font of Inspiration. Memories Blood Awakening, Divine Decree, Sparks of Black, Shatterpoint, Elementalist or Tactician. Artifacts Colossal Scars and Scorched Cloak with Shifter Dmg%.
-- For every routine avoid the perks Adaptation, Tatsujin and Wings of Freedom, and the Flashsteps memory.
+## Builds and skill layouts
+Put your skills on these keys (or change the keys in Settings > Keybinds). Each picture shows the human bar (killing titans) and the bar once you've shifted.
+For every routine avoid the perks Adaptation, Tatsujin and Wings of Freedom, and the Flashsteps memory.
+
+### Blood Awakening
+[Skill layout picture: blood - open the Guide inside the app to see it]
+- Skill layout: human 1 = the fist (the macro presses it to break out of grabs), 2 = the speed boost (yellow speedometer), 3 and 4 = empty, 5 = shift. Colossal: 2 = eject, 4 = the big attack, 5 = stomp.
+- Family: any (Shiki for luck, Fritz for extra gems).
+- Perks: Warchief or Stormwrath, Immortal, Founder's Blessing or Avatar of Ymir, Munition Masters.
+- Artifacts: Colossal Scars and Cloak, both with Shifter Dmg%.
+- Memories: Blood Awakening (required). Optional: any legendary memory, or memories that add damage.
+
+### Shiki
+[Skill layout picture: shiki - open the Guide inside the app to see it]
+- Skill layout: human 1 = the fist, 2 = the speed boost, 3 = the comet skill, 4 = the Shiki lightning skill, 5 = shift. Colossal: same as Blood Awakening.
+- Family: Shiki. Skill tree: right - right - left.
+- Perks: Kengo or Godforged, Immortal, Founder's Blessing or Avatar of Ymir, Munition Masters. You need Godforged or Avatar of Ymir.
+- Artifacts: Colossal Scars and Cloak, both with TS Dmg%.
+- Memories: Apotheosis and Afterimages (both required). Optional: any legendary memory, or memories that add damage.
+
+### Universal (thunder spears)
+[Skill layout picture: universal - open the Guide inside the app to see it]
+- Skill layout: human 1 = the fist, 2 = the speed boost, 3 = the comet skill, 4 = the spear volley, 5 = shift. Colossal: same as Blood Awakening.
+- Family: Fritz, or Reiss, or any other. Skill tree: right - right - left. Don't unlock the skill tree for the Fritz family.
+- Perks: Kengo or Godforged, Immortal, Founder's Blessing or Avatar of Ymir, Munition Masters. You need Godforged or Avatar of Ymir.
+- Artifacts: Colossal Scars and Cloak, both with TS Dmg%.
+- Memories: Apotheosis and Afterimages (both required). Optional: any legendary memory, or memories that add damage.
+
+### Female Raid
+[Skill layout picture: female - open the Guide inside the app to see it]
+- Skill layout: keys 1 to 5 as in the picture - human bar on top, titan bar after you shift.
+- Family: Fritz. Skill tree: right - right - left, capstone - capstone - no capstone.
+- Perks (all required): Stormwrath, Avatar of Ymir, 15th Commander, Immortal, Font of Inspiration. Don't take Adaptation - the failsafe needs it off.
+- Artifacts: Colossal Scars and Scorched Cloak, both with Shifter Dmg%.
+- Memories (all required): Blood Awakening, Divine Decree, Sparks of Black, Shatterpoint, Elementalist or Tactician.
 
 ## Going fast (30 second missions)
 - Runs tab (main window): every run's time, result and loot, plus a bar chart of how long each step of the last run took - so you can see exactly where the time goes. The big timer in the "Now" card counts the current run (tenths of a second); Best and Avg sit under it. Your best time per routine is saved, and Discord messages say NEW BEST when you beat it.

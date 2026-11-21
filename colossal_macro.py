@@ -5458,10 +5458,10 @@ class SettingsWindow:
 
 
 class GuideWindow:
-    def __init__(self, app):
+    def __init__(self, app, lines=None, title="How to use"):
         self.top = tk.Toplevel(app.root)
         self.top.withdraw()
-        self.top.title("%s - How to use" % APP_NAME)
+        self.top.title("%s - %s" % (APP_NAME, title))
         self.top.configure(bg=BG)
         shell = card(self.top)
         shell.pack(fill="both", expand=True, padx=px(16), pady=px(16))
@@ -5475,18 +5475,37 @@ class GuideWindow:
         text.tag_configure("h1", font=(FONT_SEMI, 18), foreground=TEXT, spacing1=px(4), spacing3=px(2))
         text.tag_configure("sub", foreground=MUTED, spacing3=px(8))
         text.tag_configure("h2", font=(FONT_SEMI, 12), foreground=ACCENT_SOFT, spacing1=px(16), spacing3=px(4))
-        text.tag_configure("bullet", lmargin1=px(8), lmargin2=px(24), foreground="#cfd2d9")
-        try:
-            with open(resource_path(GUIDE_FILE), "r", encoding="utf-8") as fh:
-                lines = fh.read().splitlines()
-        except Exception:
-            lines = ["The guide file is missing. See HOW TO USE.txt next to the app."]
+        text.tag_configure("h3", font=(FONT_SEMI, 11), foreground=TEXT, spacing1=px(12), spacing3=px(4))
+        text.tag_configure("bullet", lmargin1=px(8), lmargin2=px(24), foreground=mix(TEXT, MUTED, 0.2))
+        text.tag_configure("pic", lmargin1=px(4), spacing1=px(4), spacing3=px(6))
+        self.images = []
+        if lines is None:
+            try:
+                with open(resource_path(GUIDE_FILE), "r", encoding="utf-8") as fh:
+                    lines = fh.read().splitlines()
+            except Exception:
+                lines = ["The guide file is missing. See HOW TO USE.txt next to the app."]
         after_h1 = False
         for line in lines:
             s = line.rstrip()
             if s.startswith("==="):
                 continue
-            if s.startswith("## "):
+            pic = re.match(r"^\[Skill layout picture: (\w+)", s)
+            if pic:  # the routine's skill layout picture (the .txt file only has this line)
+                try:
+                    im = Image.open(resource_path("assets", "layouts", pic.group(1) + ".png")).convert("RGB")
+                    w = min(px(600), im.width)
+                    im = im.resize((w, int(im.height * w / im.width)), Image.LANCZOS)
+                    photo = ImageTk.PhotoImage(im)
+                    self.images.append(photo)
+                    text.image_create("end", image=photo)
+                    text.insert("end", "\n", "pic")
+                except Exception:
+                    pass
+                continue
+            if s.startswith("### "):
+                text.insert("end", s[4:] + "\n", "h3")
+            elif s.startswith("## "):
                 text.insert("end", s[3:] + "\n", "h2")
             elif s.startswith("# "):
                 text.insert("end", s[2:] + "\n", "h1")
@@ -5548,8 +5567,87 @@ class MiniBar:
 ICON_FONT = "Segoe MDL2 Assets"
 NAV_ICONS = {"Dashboard": "\ue80f", "Runs": "\ue81c", "Graph": "\ue9d2", "Loot": "\ue7b8", "Stats": "\ueb05",
              "Appearance": "\ue790", "Settings": "\ue713", "Guide": "\ue897"}
-NAV_TEXT = {"Graph": "Analytics", "Stats": "All-time stats"}
-PAGE_SUBTITLES = {"Runs": "Every run this session and where the time went",
+NAV_TEXT = {"Graph": "Analytics", "Stats": "All-time stats", "Build": "Your build"}
+NAV_ICONS["Build"] = "\ue8fd"
+CREDIT = "Made by Aarav Narula"
+# What each routine needs (shown on the 'Your build' page). (title, text, important)
+_AVOID = "Adaptation, Tatsujin and Wings of Freedom (perks), Flashsteps (memory)"
+_OPTIONAL = "Any legendary memory, or memories that add damage"
+BUILDS = {
+    "Blood Awakening": {"layout": "blood", "rows": [
+        ("Family", "Any - Shiki for luck, Fritz for extra gems", False),
+        ("Perks", "Warchief or Stormwrath, Immortal, Founder's Blessing or Avatar of Ymir, Munition Masters", False),
+        ("Artifacts", "Colossal Scars and Cloak, both with Shifter Dmg%", False),
+        ("Memories", "Blood Awakening (required)", True),
+        ("Optional", _OPTIONAL, False),
+        ("Avoid", _AVOID, False)]},
+    "Shiki": {"layout": "shiki", "rows": [
+        ("Family", "Shiki", False),
+        ("Skill tree", "Right - right - left", False),
+        ("Perks", "Kengo or Godforged, Immortal, Founder's Blessing or Avatar of Ymir, Munition Masters", False),
+        ("You need", "Godforged or Avatar of Ymir", True),
+        ("Artifacts", "Colossal Scars and Cloak, both with TS Dmg%", False),
+        ("Memories", "Apotheosis and Afterimages (both required)", True),
+        ("Optional", _OPTIONAL, False),
+        ("Avoid", _AVOID, False)]},
+    "Universal": {"layout": "universal", "rows": [
+        ("Family", "Fritz, or Reiss, or any other", False),
+        ("Skill tree", "Right - right - left. Don't unlock the skill tree for the Fritz family.", False),
+        ("Perks", "Kengo or Godforged, Immortal, Founder's Blessing or Avatar of Ymir, Munition Masters", False),
+        ("You need", "Godforged or Avatar of Ymir", True),
+        ("Artifacts", "Colossal Scars and Cloak, both with TS Dmg%", False),
+        ("Memories", "Apotheosis and Afterimages (both required)", True),
+        ("Optional", _OPTIONAL, False),
+        ("Avoid", _AVOID, False)]},
+    "Female Raid": {"layout": "female", "rows": [
+        ("Family", "Fritz", False),
+        ("Skill tree", "Right - right - left; capstone - capstone - no capstone", False),
+        ("Perks (all required)", "Stormwrath, Avatar of Ymir, 15th Commander, Immortal, Font of Inspiration", True),
+        ("Artifacts", "Colossal Scars and Scorched Cloak, both with Shifter Dmg%", False),
+        ("Memories (all required)", "Blood Awakening, Divine Decree, Sparks of Black, Shatterpoint, Elementalist or Tactician", True),
+        ("Avoid", "Adaptation (the failsafe needs it off), Tatsujin, Wings of Freedom (perks), Flashsteps (memory)", False),
+        ("Before the first raid", "Pick the chest spots in Settings > Timings > Female Raid", True)]},
+}
+APP_TOUR = """# How to use the app
+A quick tour: where everything is, how to read the Guide, and what we recommend.
+
+## The window
+- Sidebar (left): Dashboard, Your build, Runs, Analytics, Loot and All-time stats. At the bottom: Appearance (theme and colours), Settings and Guide.
+- Top bar: the page you're on, this tour, the routine picker (Blood Awakening, Shiki, Universal, Female Raid) and the status badge (Idle, Waiting, Running, Paused).
+
+## Dashboard
+- The big card shows the step the macro is on, a timer for the current run and the step that comes next.
+- Start (F8) starts the macro, Pause (F6) pauses and resumes, Stop (F7) stops it. Moving the mouse into the top-left corner of the screen also stops it.
+- Under it: runs done, success rate, best and average time, runs per hour. The Activity log at the bottom says everything the macro does.
+
+## Your build
+- Shows only what the routine you picked needs: the skill layout picture (which skill goes on which key, before and after you shift), family, skill tree, perks, artifacts and memories. Pick another routine at the top and it changes.
+
+## Runs, Analytics, Loot, All-time stats
+- Runs: every run this session with its time, result and loot, and how long each step of the last run took.
+- Analytics: the last 24 hours - runs per hour, average time, loot, your recent run times and the average time of each step. Save picture and Send to Discord share it.
+- Loot: what this session dropped. All-time stats: everything since you last reset the stats.
+
+## Settings
+- Keybinds: the keys the macro presses - make them match your game. The Start / Pause / Stop hotkeys are here too.
+- Timings: every wait and spam time, one page per routine. "Load speed preset" makes it faster, "Load defaults" puts it back. The Speed finder (Blood Awakening) finds shorter dash and strafe times by itself.
+- Pictures: what the macro looks for on the screen. "Test detection now" shows what it can see. If something isn't seen, press Capture (or End screen, for results and loot) and drag a box around it.
+- Failsafe: what happens when a mission gets stuck. Discord: messages, the stats graph and bot commands. Reconnect: rejoins the game after a disconnect. App: your screen, session limits (stop after X runs or hours) and loot tracking.
+- Press Save at the bottom after changing anything.
+
+## The Guide
+- Guide (bottom of the sidebar) is the full manual, in sections: Quick start, The routines, Before you start, Builds and skill layouts, Going fast, Running it for hours, Stats graph, Loot, Discord, Auto-reconnect, If something doesn't work.
+- Stuck? Read "If something doesn't work" first - most problems are a picture the macro can't see, fixed in Settings > Pictures.
+
+## Recommendations
+- Set up your build first (Your build page) and check your keys in Settings > Keybinds.
+- Load the speed preset (Settings > Timings > your routine) and, for Blood Awakening, turn on the Speed finder.
+- Leave the mouse and keyboard alone while it runs. Windowed and fullscreen both work - don't resize the window during a session.
+- For long sessions lower the Roblox graphics and set a session limit (Settings > App).
+- Watch the first 2-3 runs: the log shows the start icon and retry button being found and your shift being learned.
+"""
+PAGE_SUBTITLES = {"Build": "What you need for the routine you picked",
+                  "Runs": "Every run this session and where the time went",
                   "Graph": "The last 24 hours of the routine you picked",
                   "Loot": "What this session dropped", "Stats": "Everything since the stats were last reset",
                   "Appearance": "Theme and accent colour"}
@@ -5711,7 +5809,7 @@ class App:
             self.root.iconbitmap(default=resource_path("assets", "icon.ico"))
         except tk.TclError:
             pass
-        self.root.minsize(px(900), px(640))
+        self.root.minsize(px(1000), px(640))
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.mini = MiniBar(self)
         self.build()
@@ -5752,14 +5850,14 @@ class App:
         names = tk.Frame(brand, bg=SIDE)
         names.pack(side="left")
         label(names, APP_NAME, 11, TEXT, True, bg=SIDE).pack(anchor="w")
-        label(names, "AOTR grind macro  ·  v" + VERSION, 8, DIM, bg=SIDE).pack(anchor="w")
+        label(names, "v" + VERSION, 8, DIM, bg=SIDE).pack(anchor="w")
         nav_w = px(216) - 2 * px(14)
 
         def section(text):
             label(side, text, 7, DIM, True, bg=SIDE).pack(anchor="w", padx=px(22), pady=(px(6), px(6)))
 
         section("MACRO")
-        for key in ("Dashboard", "Runs", "Graph", "Loot", "Stats"):
+        for key in ("Dashboard", "Build", "Runs", "Graph", "Loot", "Stats"):
             item = NavItem(side, key, lambda k=key: self.show_tab(k), nav_w)
             item.pack(padx=px(14), pady=px(1))
             self.nav[key] = item
@@ -5788,6 +5886,9 @@ class App:
         self.routine_var = tk.StringVar(value=self.cfg["routine"])
         self.routine_seg = Dropdown(top, self.routine_var, ROUTINES, command=self.on_routine)
         self.routine_seg.pack(side="right", padx=(0, px(10)))
+        Btn(top, "How to use the app", self.open_tour, "normal", padx=px(14), pady=px(7), font=(FONT_SEMI, 9),
+            radius=px(9)).pack(side="right", padx=(0, px(10)))
+        label(top, CREDIT, 9, MUTED).pack(side="right", padx=(0, px(12)))
         self.tab_var = tk.StringVar(value="Dashboard")
         self.tab_card = tk.Frame(main, bg=BG)
         self.tab_card.pack(fill="both", expand=True, padx=pad, pady=(0, px(22)))
@@ -5966,11 +6067,59 @@ class App:
 
         # ---- Appearance ----
         self.build_appearance()
+        self.build_build_page()
 
         self.refresh_runs()
         self.show_tab("Dashboard")
         self.apply_routine()
         self.set_status("idle")
+
+    def build_build_page(self):
+        page = tk.Frame(self.tab_card, bg=BG)
+        self.tabs["Build"] = page
+        self.build_box = card(page)
+        self.build_box.pack(fill="both", expand=True)
+        self.build_inner = None
+        self.refresh_build_page()
+
+    def refresh_build_page(self):
+        """Show only what the picked routine needs: its skill layout picture and its build."""
+        if getattr(self, "build_box", None) is None:
+            return
+        if self.build_inner is not None:
+            self.build_inner.destroy()
+        routine = self.cfg["routine"]
+        b = BUILDS[routine]
+        inner = tk.Frame(self.build_box, bg=CARD)
+        inner.pack(fill="both", expand=True, padx=px(24), pady=px(20))
+        self.build_inner = inner
+        head = tk.Frame(inner, bg=CARD)
+        head.pack(fill="x")
+        label(head, "What you need for %s" % routine, 13, TEXT, True).pack(side="left")
+        label(head, "pick another routine at the top to see its build", 8, DIM).pack(side="right")
+        body = tk.Frame(inner, bg=CARD)
+        body.pack(fill="both", expand=True, pady=(px(14), 0))
+        left = tk.Frame(body, bg=CARD)
+        left.pack(side="left", anchor="n")
+        w = px(430)
+        try:
+            im = Image.open(resource_path("assets", "layouts", b["layout"] + ".png")).convert("RGB")
+            im = im.resize((w, int(im.height * w / im.width)), Image.LANCZOS)
+            self.build_photo = ImageTk.PhotoImage(im)
+            tk.Label(left, image=self.build_photo, bg=CARD, bd=0).pack(anchor="w")
+        except Exception:
+            pass
+        label(left, "Put each skill on the key shown under it - the top row before you shift, the bottom row after. "
+                    "Different keys? Change them in Settings > Keybinds.", 8, DIM, wraplength=w,
+              justify="left").pack(anchor="w", pady=(px(8), 0))
+        right = tk.Frame(body, bg=CARD)
+        right.pack(side="left", fill="both", expand=True, padx=(px(22), 0), anchor="n")
+        for i, (title, text, strong) in enumerate(b["rows"]):
+            label(right, title.upper(), 7, ACCENT if strong else DIM, True).pack(anchor="w", pady=(0 if i == 0 else px(10), 0))
+            label(right, text, 10, TEXT, strong, wraplength=px(290), justify="left").pack(anchor="w", pady=(px(1), 0))
+
+    def open_tour(self):
+        GuideWindow(self, APP_TOUR.splitlines(), "How to use the app")
 
     def build_appearance(self):
         page = tk.Frame(self.tab_card, bg=BG)
@@ -6204,6 +6353,7 @@ class App:
         raid = routine == "Female Raid"
         if self.tab_var.get() == "Dashboard":
             self.apply_subtitle()
+        self.refresh_build_page()
         self.loot_lbls["main"][0].configure(text="VESSELS" if raid else "SCROLLS")
         for kind in FRAGMENT_KINDS + SERUM_KINDS:
             self.loot_lbls[kind][0].configure(text=LOOT_SHORT[kind].upper())
@@ -6801,7 +6951,7 @@ def selftest(out_path):
             app.retheme()
         app.cfg["app"]["theme"] = "Midnight"
         app.retheme()
-        ok("every theme builds", len(app.tabs) == 6 and app.tab_var.get() in app.tabs)
+        ok("every theme builds", set(app.tabs) == {"Dashboard", "Build", "Runs", "Graph", "Loot", "Stats", "Appearance"} and app.tab_var.get() in app.tabs)
         app.open_settings()
         app.settings.top.withdraw()
         for page in SettingsWindow.NAV:
@@ -6813,6 +6963,11 @@ def selftest(out_path):
         g = GuideWindow(app)
         g.top.withdraw()
         ok("guide window builds", True)
+        t = GuideWindow(app, APP_TOUR.splitlines(), "How to use the app")
+        t.top.withdraw()
+        ok("app tour builds", True)
+        ok("build page for every routine", set(BUILDS) == set(ROUTINES) and all(
+            os.path.isfile(resource_path("assets", "layouts", BUILDS[r]["layout"] + ".png")) for r in ROUTINES))
         url, body, headers = build_discord_request(dict(DEFAULT_DISCORD, mode="webhook", url="https://discord.com/api/webhooks/1/x"),
                                                    "hi", {"title": "t"}, b"\x89PNG", True)
         ok("discord message builds", url.endswith("/x") and b"payload_json" in body and "multipart" in headers["Content-Type"])
