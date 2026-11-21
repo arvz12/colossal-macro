@@ -20,7 +20,7 @@ If you press F8 while the macro is waiting, it starts the routine right away (ha
 Every mission routine waits for your ability 2 icon (the yellow speedometer) to show - that means the mission started. Then:
 - Blood Awakening (Colossal): ability 2, dash 8.2s, strafe left (double-tap A) 8s, spam ability 5 to shift, wait 17s, spam the shifted ability 4 for 8s, then ability 5 every second while walking right until the mission ends.
 - Shiki: ability 2, dash, one strafe, ability 3, then strafes to buy time until ability 4 is ready (it watches for the ability 4 icon), ability 4, then the same shift as above.
-- Universal (thunder spears): ability 2, dash, one strafe, ability 3, looks down, spams ability 4 for 3.5s, then the same shift as above.
+- Universal (thunder spears): ability 2, dash, one strafe, ability 3, looks down, spams ability 4 for 3.5s, then the same shift as above. Rage preset: Order: Rage on key 2 instead of Order: Advance, and 2 single thunder spear throws (left click) after ability 4.
 - Female Raid: starts when the skip button (or the raid start picture) shows. It spams the skip key on every skip button, uses buffs (abilities 1, 3, 5), shifts, then cycles abilities 4 > 3 > 2. After the 3rd skip it watches for the heatwave and spams ability 1 while it shows. At the end it opens the chests, clicks finish, then retry.
 
 Every timing can be changed in Settings > Timings (Shared = used by all routines, plus one page per routine). Every value has a short explanation, and each page has a reset button.
@@ -60,6 +60,14 @@ For every routine avoid the perks Adaptation, Tatsujin and Wings of Freedom, and
 - Perks: Kengo or Godforged, Immortal, Founder's Blessing or Avatar of Ymir, Munition Masters. You need Godforged or Avatar of Ymir.
 - Artifacts: Colossal Scars and Cloak, both with TS Dmg%.
 - Memories: Apotheosis and Afterimages (both required). Optional: any legendary memory, or memories that add damage.
+
+### Universal - Rage preset (more damage, no Avatar of Ymir needed)
+[Skill layout picture: universal_rage - open the Guide inside the app to see it]
+- Turn it on: Settings > Timings > Universal > Rage preset, then Save. "Normal preset" switches back.
+- Key 2 is Order: Rage instead of Order: Advance (pressed at the same moment). After the triple thunder spear the macro throws 2 single thunder spears (left click) - change the number in Settings > Timings > Universal.
+- Perks: Kengo or Godforged, Immortal, Founder's Blessing, Munition Masters. Avatar of Ymir isn't needed.
+- Memories: Apotheosis (required). Optional: Afterimages, any legendary memory, or memories that add damage.
+- One-time setup: in a mission in human form, Settings > Pictures > Capture next to "Mission start icon (Order: Rage)" and drag a box around your Order: Rage icon. The mission starts when the macro sees it.
 
 ### Female Raid
 [Skill layout picture: female - open the Guide inside the app to see it]

@@ -40,7 +40,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageGrab, ImageTk
 
 APP_NAME = "Colossal Macro"
-VERSION = "1.0 (beta)"
+VERSION = "1.1 (beta)"
 ROBLOX_PLACE_ID = 13379208636  # Attack on Titan Revolution
 
 
@@ -878,6 +878,9 @@ PICTURES = {
     "start": _pic("Mission start icon", "Detection", {"normal": "mission_start.png", "low": "low/mission_start.png"}, 0.80,
                   "Your ability 2 icon (the yellow speedometer) on the skill bar, in a mission in human form. "
                   "A mission starts when the macro sees it."),
+    "start_rage": _pic("Mission start icon (Order: Rage)", "Detection", {}, 0.80,
+                       "Universal with the Rage preset only: your Order: Rage icon on key 2, in a mission in human "
+                       "form. Capture it once - the mission starts when the macro sees it."),
     "retry": _pic("Retry button", "Detection", {"normal": "retry_text.png", "low": "low/retry_text.png"}, 0.90,
                   "The word RETRY on the end screen. Drag the box tightly around the word."),
     "retry_alt": _pic("Retry button with counter", "Detection", {"normal": "alt_retry_button.png"}, 0.85,
@@ -1456,7 +1459,11 @@ class Detector:
         return tuple(round(base * s, 3) for s in TITAN_SCALES)
 
     def start_keys(self, raid):
-        return ("skip", "raid_start") if raid else ("start",)
+        if raid:
+            return ("skip", "raid_start")
+        if self.cfg.get("routine") == "Universal" and self.cfg["timings"]["Universal"].get("rage"):
+            return ("start_rage", "start")
+        return ("start",)
 
     def start_visible(self, raid, full_every=1):
         return any(self.look(key, full_every) is not None for key in self.start_keys(raid))
@@ -1569,11 +1576,12 @@ class Detector:
     def slot2_box(self):
         """(cx, cy, w, h) of the skill bar's ability 2 slot - where the speedometer was seen at the mission
         start (native pixels) - or None when it hasn't been seen."""
-        hint = self.hints.get("start")
-        if not hint or not self.pics("start"):
-            return None
-        tpl = self.tpls("start", hint[0])[0]
-        return hint[1] + tpl.w / 2.0, hint[2] + tpl.h / 2.0, tpl.w, tpl.h
+        for key in ("start", "start_rage"):  # both sit on key 2
+            hint = self.hints.get(key)
+            if hint and self.pics(key):
+                tpl = self.tpls(key, hint[0])[0]
+                return hint[1] + tpl.w / 2.0, hint[2] + tpl.h / 2.0, tpl.w, tpl.h
+        return None
 
 
 # =============================================================================
@@ -1711,6 +1719,14 @@ FIELDS = {
         Field("Ability 4", "ability4_time", "Ability 4 spam time", "sec", 3.5, 0, 30, "How long ability 4 is spammed after looking down."),
         Field("Ability 4", "ability4_interval", "Ability 4 spam interval", "sec", 0.1, 0.02, 5, "Pause between those presses."),
         Field("Ability 4", "after_ability", "Wait after ability 4", "sec", 0.6, 0, 10, "Pause before the shift sequence starts."),
+        Field("Order: Rage", "rage", "Key 2 is Order: Rage", "bool", False,
+              help="On (Rage preset): Order: Rage is on key 2 instead of Order: Advance and is pressed at the same "
+                   "moment. The mission start is then spotted by your Order: Rage icon - capture it once in Settings > "
+                   "Pictures (Mission start icon - Order: Rage)."),
+        Field("Thunder spear throws", "spear_throws", "Extra thunder spear throws", "int", 0, 0, 5,
+              help="After the triple thunder spear, this many single thunder spears are thrown (left click). 0 = off."),
+        Field("Thunder spear throws", "throw_interval", "Time between throws", "sec", 0.8, 0.1, 5,
+              "Pause before each throw."),
     ] + _shift_fields(),
     "Female Raid": [
         Field("Chests", "chest1", "Chest 1", "spot", None,
@@ -2238,8 +2254,8 @@ ROUTINE_STEPS = {
     "Blood Awakening": ["Ability 2", "Dashing", "Strafe left", "Shift", "Shifted 4", "Ability 5", "Retry"],
     "Shiki": ["Ability 2", "Dashing", "Strafe", "Ability 3", "Buying time", "Ability 4", "Shift", "Shifted 4",
               "Ability 5", "Retry"],
-    "Universal": ["Ability 2", "Dashing", "Strafe", "Ability 3", "Looking down", "Ability 4", "Shift", "Shifted 4",
-                  "Ability 5", "Retry"],
+    "Universal": ["Ability 2", "Dashing", "Strafe", "Ability 3", "Looking down", "Ability 4", "Spear throws", "Shift",
+                  "Shifted 4", "Ability 5", "Retry"],
     "Female Raid": ["Using buffs", "Shifting", "Killing Eren", "Killing Female", "Opening chests", "Retry"],
 }
 SCAN_INTERVAL = 0.5
@@ -2882,6 +2898,14 @@ class Engine:
                 self.show("Ability 4", "Spamming ability 4 for %gs" % self.rt("ability4_time"))
                 self.log("Ability 4 spam for %gs" % self.rt("ability4_time"))
                 self.spam_key_for(self.k("ability4"), self.rt("ability4_time"), self.rt("ability4_interval"), "ability 4")
+                throws = int(self.rt("spear_throws"))
+                if throws > 0:
+                    self.set_step("Spear throws")
+                    self.log("Throwing %d single thunder spear%s (left click)" % (throws, "" if throws == 1 else "s"))
+                    for i in range(throws):
+                        self.show("Spear throws", "Throw %d of %d" % (i + 1, throws))
+                        self.wait(self.rt("throw_interval"))
+                        mouse_click()
                 self.wait(self.rt("after_ability"))
             else:
                 self.set_step("Buying time")
@@ -3710,15 +3734,15 @@ class Engine:
                     self.log("Completed / Failed isn't being recognised on your screen. To fix it: Settings > "
                              "Pictures > Results > 'End screen' and drag a box around the COMPLETED (or FAILED) title "
                              "on your last end screen.")
-            # Every end screen is kept (the newest one, where late loot has faded in): Settings > Pictures >
-            # 'End screen' captures loot / result pictures from it, and it shows what the macro saw.
-            self.save_end_screen(frames[-1] if frames else first)
             for kind in found:
                 self.session["loot"][kind] += 1
                 self.cfg["stats"][self.family]["loot"][kind] += 1
             self.log("Loot: %s" % (", ".join("%s (%.2f)" % (loot_text({k: 1}), found[k]) for k in LOOT_KINDS
                                              if k in found) or "nothing"))
             self.stats_changed()
+            # Every end screen is kept (the newest one, where late loot has faded in): Settings > Pictures >
+            # 'End screen' captures loot / result pictures from it, and it shows what the macro saw.
+            self.save_end_screen(frames[-1] if frames else first)
         png = self.end_screen_png(first) if want_png else None
         frames = first = None
         if length and not was_rescued:
@@ -3927,6 +3951,9 @@ class Engine:
                 self.log("Session limit: stops %s%s" % (" or ".join(lim), ", then closes Roblox"
                                                          if self.cfg["app"].get("close_roblox_at_end") else ""))
             trim_run_log()
+            if (self.routine == "Universal" and self.rt("rage") and not os.path.isfile(own_picture_path("start_rage"))):
+                self.log("Rage preset: capture your Order: Rage icon first (Settings > Pictures > Mission start icon "
+                         "(Order: Rage)) - until then press %s in a mission to start" % key_display(self.k("start")))
             self.reconnect_on = False
             if self.cfg["reconnect"]["enabled"]:
                 missing = reconnect_missing(self.cfg, self.raid_mode)
@@ -4874,6 +4901,17 @@ class SettingsWindow:
                 pr.pack(anchor="w")
                 Btn(pr, "Load speed preset", lambda s_=sec: self.load_preset(s_, True), "primary").pack(side="left")
                 Btn(pr, "Load defaults", lambda s_=sec: self.load_preset(s_, False)).pack(side="left", padx=px(8))
+                if sec == "Universal":
+                    box2 = self.section(sf.inner, "Universal style",
+                                        "Normal: Order: Advance on key 2, meteor then triple thunder spear. Rage: Order: "
+                                        "Rage on key 2 instead (more damage - Avatar of Ymir not needed) and 2 single "
+                                        "thunder spear throws after the triple. Rage needs your Order: Rage picture "
+                                        "(Pictures > Mission start icon - Order: Rage).")
+                    pr2 = tk.Frame(box2, bg=CARD)
+                    pr2.pack(anchor="w")
+                    Btn(pr2, "Normal preset", lambda: self.load_preset("Universal", "normal")).pack(side="left")
+                    Btn(pr2, "Rage preset", lambda: self.load_preset("Universal", "rage"), "primary").pack(
+                        side="left", padx=px(8))
             groups = []
             for f in FIELDS[sec]:
                 if f.group not in groups:
@@ -4944,6 +4982,16 @@ class SettingsWindow:
         self.note("%s timings reset - press Save to keep them" % sec)
 
     def load_preset(self, sec, speed):
+        if speed in ("rage", "normal"):
+            rage = speed == "rage"
+            self.set_timing("Universal", "rage", rage)
+            self.set_timing("Universal", "spear_throws", 2 if rage else 0)
+            msg = ("Rage preset loaded: Order: Rage on key 2 + 2 thunder spear throws - press Save" if rage
+                   else "Normal preset loaded: Order: Advance on key 2, no extra throws - press Save")
+            if rage and not os.path.isfile(own_picture_path("start_rage")):
+                msg += ". Then capture your Order: Rage icon (Pictures > Mission start icon - Order: Rage)"
+            self.note(msg, GOOD)
+            return
         if speed:
             for key, v in SPEED_PRESET["Shared"].items():
                 self.set_timing("Shared", key, v)
@@ -5451,6 +5499,7 @@ class SettingsWindow:
         ok = save_config(self.cfg)
         self.app.discord.restart_bot()
         self.app.refresh_hotkey_labels()
+        self.app.refresh_build_page()
         running = self.app.engine.running()
         self.note(("Saved" if ok else "Saved for now (could not write the settings file)")
                   + (" - keys and timings apply right away; screen, pictures and reconnect on the next Start" if running else ""),
@@ -5598,6 +5647,17 @@ BUILDS = {
         ("Artifacts", "Colossal Scars and Cloak, both with TS Dmg%", False),
         ("Memories", "Apotheosis and Afterimages (both required)", True),
         ("Optional", _OPTIONAL, False),
+        ("Avoid", _AVOID, False)]},
+    "Universal (Rage)": {"layout": "universal_rage", "rows": [
+        ("Preset", "Settings > Timings > Universal > Rage preset (Normal preset switches back)", True),
+        ("Key 2", "Order: Rage instead of Order: Advance", True),
+        ("Family", "Fritz, or Reiss, or any other", False),
+        ("Skill tree", "Right - right - left. Don't unlock the skill tree for the Fritz family.", False),
+        ("Perks", "Kengo or Godforged, Immortal, Founder's Blessing, Munition Masters - Avatar of Ymir not needed", False),
+        ("Artifacts", "Colossal Scars and Cloak, both with TS Dmg%", False),
+        ("Memories", "Apotheosis (required)", True),
+        ("Optional", "Afterimages, any legendary memory, or memories that add damage", False),
+        ("One-time setup", "Capture your Order: Rage icon: Settings > Pictures > Mission start icon (Order: Rage)", True),
         ("Avoid", _AVOID, False)]},
     "Female Raid": {"layout": "female", "rows": [
         ("Family", "Fritz", False),
@@ -6089,6 +6149,8 @@ class App:
         if self.build_inner is not None:
             self.build_inner.destroy()
         routine = self.cfg["routine"]
+        if routine == "Universal" and self.cfg["timings"]["Universal"].get("rage"):
+            routine = "Universal (Rage)"
         b = BUILDS[routine]
         inner = tk.Frame(self.build_box, bg=CARD)
         inner.pack(fill="both", expand=True, padx=px(24), pady=px(20))
@@ -6114,9 +6176,21 @@ class App:
               justify="left").pack(anchor="w", pady=(px(8), 0))
         right = tk.Frame(body, bg=CARD)
         right.pack(side="left", fill="both", expand=True, padx=(px(22), 0), anchor="n")
-        for i, (title, text, strong) in enumerate(b["rows"]):
-            label(right, title.upper(), 7, ACCENT if strong else DIM, True).pack(anchor="w", pady=(0 if i == 0 else px(10), 0))
-            label(right, text, 10, TEXT, strong, wraplength=px(290), justify="left").pack(anchor="w", pady=(px(1), 0))
+        below = ("Optional", "Avoid", "One-time setup", "Before the first raid")  # these sit under the picture
+        firsts = {"right": True, "left": True}
+        right_texts = []
+        for title, text, strong in b["rows"]:
+            side = "left" if title in below else "right"
+            col, wrap = (left, w) if side == "left" else (right, px(260))
+            label(col, title.upper(), 7, ACCENT if strong else DIM, True).pack(
+                anchor="w", pady=(0 if firsts[side] and side == "right" else px(10) if side == "left" else px(7), 0))
+            t = label(col, text, 10, TEXT, strong, wraplength=wrap, justify="left")
+            t.pack(anchor="w")
+            if side == "right":
+                right_texts.append(t)
+            firsts[side] = False
+        # wrap the right column's text to the room it really has (it changes with the window width)
+        right.bind("<Configure>", lambda e: [t.configure(wraplength=max(px(120), e.width - px(6))) for t in right_texts])
 
     def open_tour(self):
         GuideWindow(self, APP_TOUR.splitlines(), "How to use the app")
@@ -6966,8 +7040,8 @@ def selftest(out_path):
         t = GuideWindow(app, APP_TOUR.splitlines(), "How to use the app")
         t.top.withdraw()
         ok("app tour builds", True)
-        ok("build page for every routine", set(BUILDS) == set(ROUTINES) and all(
-            os.path.isfile(resource_path("assets", "layouts", BUILDS[r]["layout"] + ".png")) for r in ROUTINES))
+        ok("build page for every routine", set(ROUTINES) <= set(BUILDS) and all(
+            os.path.isfile(resource_path("assets", "layouts", BUILDS[r]["layout"] + ".png")) for r in BUILDS))
         url, body, headers = build_discord_request(dict(DEFAULT_DISCORD, mode="webhook", url="https://discord.com/api/webhooks/1/x"),
                                                    "hi", {"title": "t"}, b"\x89PNG", True)
         ok("discord message builds", url.endswith("/x") and b"payload_json" in body and "multipart" in headers["Content-Type"])

@@ -1,4 +1,4 @@
-# Colossal Macro - v1.0 (beta)
+# Colossal Macro - v1.1 (beta)
 
 Grind macro for **Attack on Titan Revolution** (Roblox), built for Colossal users. Windows app (one `.exe`, nothing to install).
 
@@ -35,6 +35,14 @@ Put your skills on these keys (or change the keys in the app: Settings > Keybind
 - **Perks:** Kengo or Godforged, Immortal, Founder's Blessing or Avatar of Ymir, Munition Masters - you need **Godforged or Avatar of Ymir**
 - **Artifacts:** Colossal Scars and Cloak, both with TS Dmg%
 - **Memories:** **Apotheosis** and **Afterimages** (both required); optional: any legendary memory or memories that add damage
+
+### Universal - Rage preset (more damage, no Avatar of Ymir needed)
+![Universal Rage skill layout](assets/layouts/universal_rage.png)
+- **Turn it on:** in the app, Settings > Timings > Universal > **Rage preset** (Normal preset switches back)
+- **Key 2:** Order: Rage instead of Order: Advance; after the triple thunder spear the macro throws 2 single thunder spears (left click)
+- **Perks:** Kengo or Godforged, Immortal, Founder's Blessing, Munition Masters - Avatar of Ymir not needed
+- **Memories:** **Apotheosis** (required); optional: Afterimages, any legendary memory or memories that add damage
+- **One-time setup:** capture your Order: Rage icon - Settings > Pictures > Mission start icon (Order: Rage)
 
 ### Female Raid
 ![Female Raid skill layout](assets/layouts/female.png)
