@@ -3,7 +3,7 @@ Grind macro for Attack on Titan Revolution (Roblox). Four routines: Blood Awaken
 ===========================================================================
 
 ## The window
-A sidebar on the left: Dashboard (live run, timer, stats, activity log), Runs, Analytics (graph), Loot and All-time stats; at the bottom Appearance, Settings and the Guide. Appearance: pick a theme (Midnight, Graphite, Ocean, Forest, Crimson, Light) and any accent colour (presets or Custom...). It changes right away and is saved.
+A sidebar on the left: Build optimiser (your best build and what to get next), Dashboard (live run, timer, stats, activity log), Your build, Runs, Analytics (graph), Loot and All-time stats; at the bottom Appearance, Settings and the Guide. Appearance: pick a theme (Midnight, Graphite, Ocean, Forest, Crimson, Light) and any accent colour (presets or Custom...). It changes right away and is saved.
 
 ## Quick start
 1. Open Colossal Macro.exe. (Windows may say "Windows protected your PC" the first time - click More info > Run anyway. It does that for any new app that isn't signed.)
@@ -32,6 +32,18 @@ Every timing can be changed in Settings > Timings (Shared = used by all routines
 - Default keys the macro presses: 1, 2, 3, 4, 5, Space (dash), A / D (strafe / move), Ctrl (shift lock), E (skip, raid only). Change them in Settings > Keybinds if yours are different.
 - Blood Awakening skill bar: human key 2 = the yellow speedometer ability, key 5 = Shift. Colossal: key 2 = eject (only used by the failsafe), key 4 = your big Colossal attack, key 5 = stomp. (Every routine's full build and skill layout picture: Builds and skill layouts, below.)
 - Female Raid: open Settings > Timings > Female Raid and press Pick next to Chest 1 (and Chest 2 if "Open chest 2" is on), then click where the chest is on the end-of-raid screen. The raid can't open chests without this.
+
+## Build optimiser
+Pick a playstyle - Shifter, Thunder Spear or ODM - and the Build optimiser page shows the best build you can equip from the perks and memories you own, slot by slot, why each perk was picked, and the 3 upgrades that would make it strongest (with how much stronger, in %, and where they come from).
+- Before you scan it shows the best possible build (every perk at +10) - something to aim for.
+- Scan my perks: in Roblox open Equipment > Perks and click your Body slot so your perk list shows, then press Scan my perks. The macro clicks each perk (every category tab, scrolling down) and reads its name and level from the panel on the right. It only clicks perk tiles and the tabs - never Equip or Enhance. It takes under a second per perk (about 3 minutes for 250 perks). To stop it press Esc or just move your mouse (F7 and Stop scan work too; the Stop build scan key can be changed in Settings > Keybinds). A bar at the top of the screen shows how far it is.
+- Filter (the SCAN row): Common, Rare and Epic perks are skipped unless you turn them on - quicker, and they're rarely in a best build. Once a few tiles of a rarity have been read it knows their border colour and skips the rest without clicking; anything it isn't sure about is read anyway.
+- How to use (top of the page) opens a step-by-step tutorial with a picture; it also opens the first time you visit the page.
+- Scan memories: open Equipment > Prestige (your memories show there) and press Scan memories. Open the memory Storage and press it again to add the stored ones.
+- Set your family (some give extra perk slots) and which capstones you've unlocked (Divine perks only fit Offense / Defense / Support slots with that capstone; the Body slot takes any perk).
+- Edit list: fix a level, add a perk the scan missed or remove one you no longer have.
+- How it decides: every perk is scored from its real stats at your level, weighted for the playstyle (Shifter: shifter damage, titan stats, awakening; Thunder Spear: ODM/TS damage, spears, limbs; ODM: ODM damage, crits, limbs, speed), and every combination that fits your slots is checked, so the build shown is the best by those numbers. The macro's rules sit on top: Shifter always takes the Blood Awakening memory; Thunder Spear needs Godforged or Avatar of Ymir plus the Apotheosis and Afterimages memories; Shifter and Thunder Spear never use Adaptation, Tatsujin, Wings of Freedom or Flashstep. ODM is the best overall build (it isn't a macro routine).
+- Windows' built-in text recognition reads the screen (Windows 10 or 11). Nothing is sent anywhere.
 
 ## Builds and skill layouts
 Put your skills on these keys (or change the keys in Settings > Keybinds). Each picture shows the human bar (killing titans) and the bar once you've shifted.

@@ -1,6 +1,8 @@
 @echo off
 rem Builds "dist\Colossal Macro.exe" (one file, no console). Needs Python with:
-rem   python -m pip install pyinstaller opencv-python numpy pillow
+rem   python -m pip install pyinstaller opencv-python numpy pillow winrt-runtime winrt-Windows.Media.Ocr
+rem   winrt-Windows.Graphics.Imaging winrt-Windows.Storage.Streams winrt-Windows.Foundation
+rem   winrt-Windows.Foundation.Collections winrt-Windows.Globalization
 cd /d "%~dp0"
 python make_icon.py || goto :error
 python -m PyInstaller --noconfirm --clean --onefile --windowed ^
@@ -9,6 +11,7 @@ python -m PyInstaller --noconfirm --clean --onefile --windowed ^
   --version-file version_info.txt ^
   --add-data "assets;assets" ^
   --add-data "HOW TO USE.txt;." ^
+  --collect-submodules winrt --hidden-import build_optimiser ^
   --exclude-module matplotlib --exclude-module scipy --exclude-module pandas ^
   --exclude-module IPython --exclude-module pytest ^
   colossal_macro.py || goto :error

@@ -39,8 +39,10 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageGrab, ImageTk
 
+import build_optimiser as bo
+
 APP_NAME = "Colossal Macro"
-VERSION = "1.1 (beta)"
+VERSION = "1.2 (beta)"
 ROBLOX_PLACE_ID = 13379208636  # Attack on Titan Revolution
 
 
@@ -240,6 +242,17 @@ def mouse_click():
     mouse_button(True)
     time.sleep(0.02)
     mouse_button(False)
+
+
+MOUSEEVENTF_WHEEL = 0x0800
+
+
+def mouse_wheel(notches):
+    """Scroll the wheel: notches > 0 up, < 0 down (where the cursor is)."""
+    inp = INPUT()
+    inp.type = INPUT_MOUSE
+    inp.mi = MOUSEINPUT(0, 0, ctypes.c_uint32(int(notches) * 120).value, MOUSEEVENTF_WHEEL, 0, 0)
+    _send([inp])
 
 
 def cursor_pos():
@@ -1606,7 +1619,8 @@ TIMING_SECTIONS = ("Shared",) + ROUTINES
 KEY_ROWS = [
     ("start", "Start / manual start", "Starts the macro. While it waits for a mission, starts the routine right away."),
     ("pause", "Pause / resume", "Pauses everything and lets go of all keys."),
-    ("stop", "Stop", "Stops the macro (the app stays open)."),
+    ("stop", "Stop", "Stops the macro (the app stays open). Also stops a Build optimiser scan."),
+    ("scan_stop", "Stop build scan", "Stops a Build optimiser scan straight away (moving the mouse does too)."),
     ("ability1", "Ability 1 / escape grab", "Escape grab in missions; ability 1 in the Female Raid."),
     ("ability2", "Ability 2", "First key of every mission. While shifted it ejects (used by the failsafe)."),
     ("ability3", "Ability 3", "Shiki and Universal press it after the strafe. Also used in the raid."),
@@ -1618,8 +1632,8 @@ KEY_ROWS = [
     ("lock", "Shift lock", "Used by Look up, Look down, Fix shift lock and the failsafe."),
     ("skip", "Skip cutscene", "Spammed in the Female Raid when the skip button shows."),
 ]
-HOTKEYS = ("start", "pause", "stop")
-DEFAULT_KEYS = {"start": "f8", "pause": "f6", "stop": "f7", "ability1": "1", "ability2": "2", "ability3": "3",
+HOTKEYS = ("start", "pause", "stop", "scan_stop")
+DEFAULT_KEYS = {"start": "f8", "pause": "f6", "stop": "f7", "scan_stop": "esc", "ability1": "1", "ability2": "2", "ability3": "3",
                 "ability4": "4", "ability5": "5", "dash": "space", "left": "a", "right": "d", "lock": "ctrl",
                 "skip": "e"}
 
@@ -1869,7 +1883,47 @@ def default_config():
         "rage_scale": None,
         "stats": {"missions": new_family_stats(), "raids": new_family_stats(), "best": {}},
         "learned": {},  # things the macro worked out by itself (auto-learned picture, Speed finder progress)
+        "optimiser": default_optimiser(),
     }
+
+
+def default_optimiser():
+    return {"playstyle": bo.PLAYSTYLES[0], "family": bo.FAMILIES[0], "capstones": [], "perks": {}, "memories": [],
+            "scanned_at": None, "memories_at": None, "scan_rarities": list(DEFAULT_SCAN_RARITIES),
+            "tutorial_seen": False}
+
+
+DEFAULT_SCAN_RARITIES = ("Legendary", "Mythical", "Divine")  # Common, Rare and Epic are skipped unless turned on
+
+
+def load_optimiser(saved):
+    """The optimiser's saved settings and scan, cleaned (unknown perks / bad levels dropped)."""
+    o = default_optimiser()
+    if not isinstance(saved, dict):
+        return o
+    if saved.get("playstyle") in bo.PLAYSTYLES:
+        o["playstyle"] = saved["playstyle"]
+    if saved.get("family") in bo.FAMILIES:
+        o["family"] = saved["family"]
+    caps = saved.get("capstones")
+    if isinstance(caps, list):
+        o["capstones"] = [c for c in ("Offense", "Defense", "Support") if c in caps]
+    perks = saved.get("perks")
+    if isinstance(perks, dict):
+        for n, lv in perks.items():
+            if n in bo.PERKS and isinstance(lv, (int, float)) and 0 <= lv <= bo.MAX_LEVEL:
+                o["perks"][n] = int(lv)
+    mems = saved.get("memories")
+    if isinstance(mems, list):
+        o["memories"] = [m for m in bo.MEMORIES if m in mems]
+    for k in ("scanned_at", "memories_at"):
+        if isinstance(saved.get(k), (int, float)):
+            o[k] = float(saved[k])
+    rar = saved.get("scan_rarities")
+    if isinstance(rar, list) and any(r in bo.RARITIES for r in rar):
+        o["scan_rarities"] = [r for r in bo.RARITIES if r in rar]
+    o["tutorial_seen"] = bool(saved.get("tutorial_seen", False))
+    return o
 
 
 def load_config():
@@ -1964,6 +2018,7 @@ def load_config():
         except (TypeError, ValueError):
             pass
 
+    cfg["optimiser"] = load_optimiser(saved.get("optimiser"))
     for name in ("start_scale", "rage_scale"):
         ss_ = saved.get(name)
         if isinstance(ss_, (int, float)) and 0.5 <= ss_ <= 2:
@@ -2011,6 +2066,10 @@ def load_config():
                 cfg["stats"]["missions"][new] = max(0, int(old.get(name, 0)))
             except (TypeError, ValueError):
                 pass
+    # settings from a newer version are kept as they are (running an older copy must never wipe them)
+    for k, v in saved.items():
+        if k not in cfg and k != "totals":
+            cfg[k] = v
     return cfg
 
 
@@ -5448,7 +5507,7 @@ class SettingsWindow:
         game = [self.keys[n] for n, _, _ in KEY_ROWS if n not in HOTKEYS]
         if len(set(hot)) < len(hot):
             self.show_page("Keybinds")
-            self.note("Start, Pause and Stop need three different keys", BAD)
+            self.note("The hotkeys (Start, Pause, Stop, Stop build scan) need different keys", BAD)
             return
         clash = [key_display(h) for h in hot if h in game]
         if clash:
@@ -5521,6 +5580,167 @@ class SettingsWindow:
         self.note(("Saved" if ok else "Saved for now (could not write the settings file)")
                   + (" - keys and timings apply right away; screen, pictures and reconnect on the next Start" if running else ""),
                   GOOD if ok else WARN)
+
+
+class OptimiserEditWindow:
+    """Fix what the scan read: perk levels, perks it missed, memories."""
+
+    def __init__(self, app):
+        self.app = app
+        o = app.cfg["optimiser"]
+        self.perks = dict(o["perks"])
+        self.mems = list(o["memories"])
+        self.top = tk.Toplevel(app.root)
+        self.top.withdraw()
+        self.top.title("%s - Your perks and memories" % APP_NAME)
+        self.top.configure(bg=BG)
+        self.top.protocol("WM_DELETE_WINDOW", self.close)
+        shell = tk.Frame(self.top, bg=BG)
+        shell.pack(fill="both", expand=True, padx=px(16), pady=px(16))
+        label(shell, "Your perks and memories", 14, TEXT, True).pack(anchor="w")
+        label(shell, "What the scan read. Fix a level, add something it missed or remove something you no longer have.",
+              9, MUTED).pack(anchor="w", pady=(px(2), px(12)))
+        cols = tk.Frame(shell, bg=BG)
+        cols.pack(fill="both", expand=True)
+        cols.grid_columnconfigure(0, weight=3, uniform="c")
+        cols.grid_columnconfigure(1, weight=2, uniform="c")
+        cols.grid_rowconfigure(0, weight=1)
+        pc = card(cols)
+        pc.grid(row=0, column=0, sticky="nsew")
+        mc = card(cols)
+        mc.grid(row=0, column=1, sticky="nsew", padx=(px(12), 0))
+        # perks
+        pin = tk.Frame(pc, bg=CARD)
+        pin.pack(fill="both", expand=True, padx=px(16), pady=px(14))
+        label(pin, "PERKS", 7, ACCENT, True).pack(anchor="w")
+        add = tk.Frame(pin, bg=CARD)
+        add.pack(fill="x", pady=(px(8), px(8)))
+        self.add_name = tk.StringVar(value="Pick a perk")
+        Dropdown(add, self.add_name, sorted(bo.PERKS)).pack(side="left")
+        self.add_lv = tk.StringVar(value="10")
+        tk.Spinbox(add, from_=0, to=10, width=3, textvariable=self.add_lv, bg=FIELD_BG, fg=TEXT, bd=0,
+                   buttonbackground=CARD2, insertbackground=TEXT, font=(FONT, 10)).pack(side="left", padx=px(8))
+        Btn(add, "Add", self.add_perk, "normal", padx=px(12), pady=px(5), font=(FONT_SEMI, 9), radius=px(8)).pack(
+            side="left")
+        self.plist = ScrollFrame(pin, bg=CARD)
+        self.plist.pack(fill="both", expand=True)
+        # memories
+        mmin = tk.Frame(mc, bg=CARD)
+        mmin.pack(fill="both", expand=True, padx=px(16), pady=px(14))
+        label(mmin, "MEMORIES", 7, ACCENT, True).pack(anchor="w")
+        madd = tk.Frame(mmin, bg=CARD)
+        madd.pack(fill="x", pady=(px(8), px(8)))
+        self.add_mem = tk.StringVar(value="Pick a memory")
+        Dropdown(madd, self.add_mem, sorted(bo.MEMORIES)).pack(side="left")
+        Btn(madd, "Add", self.add_memory, "normal", padx=px(12), pady=px(5), font=(FONT_SEMI, 9), radius=px(8)).pack(
+            side="left", padx=(px(8), 0))
+        self.mlist = tk.Frame(mmin, bg=CARD)
+        self.mlist.pack(fill="both", expand=True)
+        foot = tk.Frame(shell, bg=BG)
+        foot.pack(fill="x", pady=(px(12), 0))
+        Btn(foot, "Save", self.save, "primary", padx=px(22), pady=px(8), font=(FONT_SEMI, 10), radius=px(10)).pack(
+            side="right")
+        Btn(foot, "Clear everything", self.clear, "danger", padx=px(16), pady=px(8), font=(FONT_SEMI, 9),
+            radius=px(10)).pack(side="left")
+        self.note = label(foot, "", 9, MUTED)
+        self.note.pack(side="left", padx=px(12))
+        self.fill()
+        fit_geometry(self.top, px(820), px(600))
+        dark_titlebar(self.top)
+        present(self.top)
+
+    def fill(self):
+        for w in self.plist.inner.winfo_children():
+            w.destroy()
+        for w in self.mlist.winfo_children():
+            w.destroy()
+        order = sorted(self.perks, key=lambda n: (-bo.RARITIES.index(bo.PERKS[n]["rarity"]), n))
+        if not order:
+            label(self.plist.inner, "No perks yet - scan them on the Build optimiser page, or add them above.", 9,
+                  DIM, bg=CARD).pack(anchor="w")
+        for n in order:
+            r = tk.Frame(self.plist.inner, bg=CARD)
+            r.pack(fill="x", pady=px(2))
+            label(r, n, 10, bo.RARITY_COLOR.get(bo.PERKS[n]["rarity"], TEXT), True, bg=CARD).pack(side="left")
+            label(r, bo.PERKS[n]["rarity"], 8, DIM, bg=CARD).pack(side="left", padx=px(8))
+            Btn(r, "Remove", lambda n_=n: self.remove_perk(n_), "ghost", padx=px(10), pady=px(3), font=(FONT_SEMI, 8),
+                radius=px(7)).pack(side="right")
+            v = tk.StringVar(value=str(self.perks[n]))
+            sb = tk.Spinbox(r, from_=0, to=10, width=3, textvariable=v, bg=FIELD_BG, fg=TEXT, bd=0,
+                            buttonbackground=CARD2, insertbackground=TEXT, font=(FONT, 10))
+            sb.pack(side="right", padx=px(8))
+            v.trace_add("write", lambda *a, n_=n, v_=v: self.set_level(n_, v_.get()))
+            label(r, "+", 9, MUTED, bg=CARD).pack(side="right")
+        if not self.mems:
+            label(self.mlist, "No memories yet.", 9, DIM).pack(anchor="w")
+        for m in self.mems:
+            r = tk.Frame(self.mlist, bg=CARD)
+            r.pack(fill="x", pady=px(2))
+            label(r, m, 10, TEXT, True).pack(side="left")
+            label(r, "%d-star" % bo.MEMORIES[m]["stars"], 8, DIM).pack(side="left", padx=px(8))
+            Btn(r, "Remove", lambda m_=m: self.remove_memory(m_), "ghost", padx=px(10), pady=px(3),
+                font=(FONT_SEMI, 8), radius=px(7)).pack(side="right")
+        redraw_cards(self.top)
+
+    def set_level(self, n, text):
+        try:
+            lv = int(text)
+        except ValueError:
+            return
+        if 0 <= lv <= bo.MAX_LEVEL and n in self.perks:
+            self.perks[n] = lv
+
+    def add_perk(self):
+        n = self.add_name.get()
+        if n not in bo.PERKS:
+            self.note.configure(text="Pick a perk first", fg=WARN)
+            return
+        try:
+            lv = max(0, min(bo.MAX_LEVEL, int(self.add_lv.get())))
+        except ValueError:
+            lv = 0
+        self.perks[n] = max(self.perks.get(n, -1), lv)
+        self.note.configure(text="Added %s +%d" % (n, lv), fg=GOOD)
+        self.fill()
+
+    def remove_perk(self, n):
+        self.perks.pop(n, None)
+        self.fill()
+
+    def add_memory(self):
+        m = self.add_mem.get()
+        if m not in bo.MEMORIES:
+            self.note.configure(text="Pick a memory first", fg=WARN)
+            return
+        if m not in self.mems:
+            self.mems.append(m)
+        self.fill()
+
+    def remove_memory(self, m):
+        if m in self.mems:
+            self.mems.remove(m)
+        self.fill()
+
+    def clear(self):
+        if not messagebox.askyesno(APP_NAME, "Remove every perk and memory from the list?", parent=self.top):
+            return
+        self.perks, self.mems = {}, []
+        self.fill()
+
+    def save(self):
+        o = self.app.cfg["optimiser"]
+        o["perks"] = dict(self.perks)
+        o["memories"] = [m for m in bo.MEMORIES if m in self.mems]
+        if not self.perks:
+            o["scanned_at"] = None
+        elif not o["scanned_at"]:
+            o["scanned_at"] = time.time()
+        save_config(self.app.cfg)
+        self.app.refresh_optimiser()
+        self.top.destroy()
+
+    def close(self):
+        self.top.destroy()
 
 
 class GuideWindow:
@@ -5621,6 +5841,13 @@ class MiniBar:
         if self.pill is None:
             return
         a = self.app
+        if a.scanner.running() and not a.engine.running():
+            c = self.pill.canvas
+            c.itemconfigure(self.dot, fill=WARN)
+            c.itemconfigure(self.text, text=getattr(a, "scan_progress", "") or "Scanning your build...")
+            k = a.cfg["keys"]
+            c.itemconfigure(self.keys, text="%s or move the mouse = stop" % key_display(k.get("scan_stop", "esc")))
+            return
         status = a.engine.state
         look = STATUS_LOOK.get(status, STATUS_LOOK["idle"])
         c = self.pill.canvas
@@ -5635,6 +5862,8 @@ NAV_ICONS = {"Dashboard": "\ue80f", "Runs": "\ue81c", "Graph": "\ue9d2", "Loot":
              "Appearance": "\ue790", "Settings": "\ue713", "Guide": "\ue897"}
 NAV_TEXT = {"Graph": "Analytics", "Stats": "All-time stats", "Build": "Your build"}
 NAV_ICONS["Build"] = "\ue8fd"
+NAV_ICONS["Optimiser"] = "\ue735"
+NAV_TEXT["Optimiser"] = "Build optimiser"
 CREDIT = "Made by Aarav Narula"
 # What each routine needs (shown on the 'Your build' page). (title, text, important)
 _AVOID = "Adaptation, Tatsujin and Wings of Freedom (perks), Flashsteps (memory)"
@@ -5688,8 +5917,15 @@ APP_TOUR = """# How to use the app
 A quick tour: where everything is, how to read the Guide, and what we recommend.
 
 ## The window
-- Sidebar (left): Dashboard, Your build, Runs, Analytics, Loot and All-time stats. At the bottom: Appearance (theme and colours), Settings and Guide.
+- Sidebar (left): Build optimiser, Dashboard, Your build, Runs, Analytics, Loot and All-time stats. At the bottom: Appearance (theme and colours), Settings and Guide.
 - Top bar: the page you're on, this tour, the routine picker (Blood Awakening, Shiki, Universal, Female Raid) and the status badge (Idle, Waiting, Running, Paused).
+
+## Build optimiser
+- Pick Shifter, Thunder Spear or ODM at the top. It shows the best build you can equip, slot by slot (Body, Offense, Defense, Support and your family's extra slots), your memories, why each perk was picked, and Get next: the 3 upgrades that would make the build strongest, with how much (%) and where they come from.
+- Before you scan it shows the best possible build - every perk at +10.
+- Scan my perks: in Roblox open Equipment > Perks and click your Body slot, then press it. The macro clicks each perk in every tab and reads its name and level (it never clicks Equip or Enhance). Esc or moving your mouse stops it (F7 too). The SCAN row filters rarities - Common, Rare and Epic are skipped unless you turn them on. How to use on that page is a step-by-step tutorial.
+- Scan memories: open Equipment > Prestige and press it (and again on the memory Storage).
+- Family and Capstones: set them so the build only uses slots you really have. Edit list fixes anything the scan got wrong.
 
 ## Dashboard
 - The big card shows the step the macro is on, a timer for the current run and the step that comes next.
@@ -5722,7 +5958,44 @@ A quick tour: where everything is, how to read the Guide, and what we recommend.
 - For long sessions lower the Roblox graphics and set a session limit (Settings > App).
 - Watch the first 2-3 runs: the log shows the start icon and retry button being found and your shift being learned.
 """
+OPT_TUTORIAL = """# Build optimiser - how to use it
+It finds the best build you can equip from the perks and memories you own, and the upgrades that would make it stronger.
+
+## 1. Pick what you play
+- Shifter, Thunder Spear or ODM at the top of the page.
+- Before you scan, the page shows the best possible build (every perk at +10) - something to aim for.
+
+## 2. Your family and capstones
+- Family: pick yours if it's in the list - some families give extra perk slots (Ackerman, Yeager, Reiss, Fritz, Helos, Shiki).
+- Capstones: turn on the ones you've unlocked in your skill tree. Divine perks only go in an Offense, Defense or Support slot with that capstone (the Body slot takes any perk).
+
+## 3. Scan your perks
+1. In Roblox open Equipment > Perks.
+2. Click your Body slot - your perk list opens with a round tab for each category (Body, Offense, Defense, Support).
+3. In Colossal Macro press Scan my perks. It switches to Roblox by itself.
+4. Let go of the mouse. The macro clicks each perk tile, reads its name and level from the panel on the right, scrolls down and goes through every tab. It only clicks perk tiles and the tabs - never Equip or Enhance.
+5. To stop it: press Esc or just move your mouse (F7 and Stop scan work too). The bar at the top of the screen shows how far it is.
+[Skill layout picture: optimiser_perks]
+- Filter (the SCAN row): Common, Rare and Epic perks are skipped unless you turn them on - it's quicker, and they're rarely in a best build. Once it has read a few tiles of a rarity it knows their border colour and skips the rest without clicking; anything it isn't sure about is read anyway.
+- Only one category read? You opened a slot that takes one category. Open the Body slot (it has every tab), or scan each tab in turn - the scans add up.
+
+## 4. Scan your memories
+1. Open Equipment > Prestige - your 5 memories show there.
+2. Press Scan memories. Open the memory Storage and press it again to add the stored ones.
+
+## 5. Read the result
+- Each tile is a slot: the perk to put there, its rarity and level, and what it gives you.
+- Memories: the 5 to equip (required ones are marked).
+- Why this build: why each perk beat the next best one you own.
+- Get next: the 3 upgrades that make the build strongest - the % is how much stronger, and it says where each comes from (drops, divine fragments, prestige scrolls, a capstone, or levelling a perk you already have).
+
+## If something looks wrong
+- Edit list: fix a level, add a perk the scan missed, remove one you no longer have.
+- "The tiles here aren't perks": the Perks screen wasn't open - open Equipment > Perks and your Body slot, then scan again.
+- The Activity log on the Dashboard says what was read.
+"""
 PAGE_SUBTITLES = {"Build": "What you need for the routine you picked",
+                  "Optimiser": "The best build from your perks and memories - and what to get next",
                   "Runs": "Every run this session and where the time went",
                   "Graph": "The last 24 hours of the routine you picked",
                   "Loot": "What this session dropped", "Stats": "Everything since the stats were last reset",
@@ -5846,6 +6119,358 @@ def apply_theme(name, accent=""):
     bar_chart.__defaults__ = (g["CH_CARD"], True)
 
 
+class ScanProblem(Exception):
+    pass
+
+
+class BuildScanner:
+    """Reads your perks and memories off the game's menus - nothing else is touched. Perks: it clicks every tile in
+    the Perks menu (each category tab in turn, scrolling down) and reads the name and level in the detail panel with
+    Windows' text recognition. Memories: their names are read straight off the Prestige page / memory storage.
+    Stop it any time with the Stop key or by moving the mouse into the top-left corner."""
+    PANEL = (0.55, 0.10, 1.0, 0.86)  # the perk detail panel: name, level and stat lines (not the buttons below)
+    MAX_PAGES = 200                  # per tab
+
+    def __init__(self, cfg, out):
+        self.cfg, self.out = cfg, out
+        self.thread = None
+        self.quit = False
+        self.region = None
+        self.expect_pos = None  # where the scan last put the mouse (a different spot = you moved it: stop)
+        self.include = set(bo.RARITIES)
+        self.samples = []       # (border colour, rarity) of tiles read so far - to skip filtered rarities
+        self.reads = self.named = 0
+
+    def running(self):
+        return self.thread is not None and self.thread.is_alive()
+
+    def start(self, what):
+        if self.running():
+            return False
+        self.quit = False
+        self.thread = threading.Thread(target=self._run, args=(what,), name="scan", daemon=True)
+        self.thread.start()
+        return True
+
+    def stop(self):
+        self.quit = True
+
+    # ---- helpers ----
+    def _check(self):
+        k = self.cfg["keys"]
+        if self.quit or key_is_down(k["stop"]) or key_is_down(k.get("scan_stop", "esc")):
+            raise StopMacro()
+        pos = cursor_pos()
+        if pos == (0, 0):
+            raise StopMacro()
+        if self.expect_pos is not None and (abs(pos[0] - self.expect_pos[0]) > 25 or
+                                            abs(pos[1] - self.expect_pos[1]) > 25):
+            self.moved_by_user = True
+            raise StopMacro()  # you moved the mouse: stop straight away
+
+    def _say(self, text):
+        self.out.put(("opt_progress", text))
+
+    def _sleep(self, seconds):
+        end = time.time() + seconds
+        while time.time() < end:
+            self._check()
+            time.sleep(min(0.05, max(0.0, end - time.time())))
+
+    def _shot(self, g):
+        return cv2.cvtColor(g.grab(), cv2.COLOR_BGRA2BGR)
+
+    def _to_screen(self, x, y):
+        return self.region["left"] + int(x), self.region["top"] + int(y)
+
+    def _put_mouse(self, x, y):
+        sx, sy = self._to_screen(x, y)
+        user32.SetCursorPos(sx, sy)
+        time.sleep(0.03)
+        mouse_move_rel(0, 1)  # Roblox only notices the cursor after a real move
+        time.sleep(0.03)
+        self.expect_pos = cursor_pos()
+
+    def _click(self, x, y):
+        self._check()
+        self._put_mouse(x, y)
+        mouse_click()
+
+    def _wheel_at(self, x, y, notches):
+        self._check()
+        self._put_mouse(x, y)
+        step = 1 if notches > 0 else -1
+        for _ in range(abs(int(notches))):
+            mouse_wheel(step)
+            time.sleep(0.02)
+
+    def _panel(self, shot):
+        h, w = shot.shape[:2]
+        x0, y0, x1, y1 = self.PANEL
+        return shot[int(h * y0):int(h * y1), int(w * x0):int(w * x1)]
+
+    def _read_panel(self, g):
+        return bo.read_perk_panel_img(self._panel(self._shot(g)))
+
+    def _settled(self, g, area, wait=0.35):
+        """A screenshot once the scrolling has stopped moving (smooth scrolling)."""
+        self._sleep(wait)
+        x0, y0, x1, y1 = area
+        prev = self._shot(g)
+        for _ in range(6):
+            self._sleep(0.1)
+            cur = self._shot(g)
+            if float(np.mean(cv2.absdiff(prev[y0:y1, x0:x1], cur[y0:y1, x0:x1]))) < 1.0:
+                return cur
+            prev = cur
+        return prev
+
+    @staticmethod
+    def _shift_errors(before, after, lo, hi):
+        """How well `after` matches `before` moved up by s px, for s in [lo, hi] (every px; every 2nd column):
+        {s: mean difference}. The right s has a clear dip."""
+        bg = before[:, ::2].astype(np.int16)  # in colour: rarity colours tell rows apart better than grey
+        ag = after[:, ::2].astype(np.int16)
+        h = bg.shape[0]
+        out = {}
+        for s_ in range(max(1, int(lo)), min(int(h * 0.88), int(hi)) + 1):
+            out[s_] = float(np.mean(np.abs(bg[s_:] - ag[:h - s_])))
+        return out
+
+    @classmethod
+    def _measure_scroll(cls, before, after, pitch, expect=None):
+        """How far the list moved up (px), or None when it can't be told for sure. The list repeats every row, so a
+        picture match can also fit one row off: unknown moves (expect=None) only count when the best fit is clearly
+        better than the fits a row away; known ones are only looked for within a third of a row of the expected."""
+        if expect is None:
+            errs = cls._shift_errors(before, after, 2, before.shape[0])
+            if not errs:
+                return None
+            s = min(errs, key=errs.get)
+            rivals = [e for k, e in errs.items() if abs(k - s) > pitch * 0.35]
+            if rivals and (errs[s] > 0.5 * min(rivals) or min(rivals) - errs[s] < 0.15):
+                return None  # a row away fits (nearly) as well: can't tell
+            return s
+        errs = cls._shift_errors(before, after, expect - pitch * 0.33, expect + pitch * 0.33)
+        if not errs:
+            return None
+        s = min(errs, key=errs.get)
+        if errs[s] > 0.6 * max(errs.values()):
+            return None  # no clear fit near the expected move (the end of the list stopped it short)
+        return s
+
+    # ---- the scan ----
+    def _run(self, what):
+        result = {"what": what, "ok": False, "started": time.time()}
+        g = None
+        self.expect_pos, self.moved_by_user = None, False
+        self.samples, self.reads, self.named, self.skipped = [], 0, 0, 0
+        inc = self.cfg["optimiser"].get("scan_rarities")
+        self.include = set(inc) if inc else set(bo.RARITIES)
+        try:
+            if not bo.ocr_available():
+                raise ScanProblem("Windows text recognition isn't available on this PC (it needs Windows 10 or 11)")
+            if roblox_window() == 0:
+                raise ScanProblem("Roblox isn't open")
+            self.region = game_region(pick_monitor(self.cfg))
+            g = ScreenGrabber(self.region)
+            focus_roblox()
+            self._sleep(0.6)
+            if what == "perks":
+                result.update(self._scan_perks(g))
+            else:
+                result.update(self._scan_memories(g))
+            result["ok"] = True
+        except StopMacro:
+            result["error"] = "Scan stopped (you moved the mouse)" if self.moved_by_user else "Scan stopped"
+        except ScanProblem as e:
+            result["error"] = str(e)
+        except Exception as e:
+            result["error"] = "%s: %s" % (type(e).__name__, e)
+            self.out.put(("trace", traceback.format_exc()))
+        finally:
+            if g is not None:
+                g.close()
+        result["seconds"] = time.time() - result["started"]
+        self.out.put(("opt_done", result))
+
+    def _scan_memories(self, g):
+        names = bo.read_memories(bo.ocr_lines(self._shot(g), 1.5))
+        if not names:
+            raise ScanProblem("No memories found on the screen. In Roblox open Equipment > Prestige (your memories "
+                              "show there), or the memory Storage, then press Scan memories again.")
+        return {"memories": names}
+
+    def _scan_perks(self, g):
+        grid = bo.find_perk_grid(self._shot(g))
+        if grid is None:
+            raise ScanProblem("Couldn't find your perk list. In Roblox open Equipment > Perks and click your Body "
+                              "slot so the list shows, then press Scan my perks again.")
+        found = {}
+        tabs = grid["tabs"] or [None]
+        geom, per_notch = None, None
+        for ti, tab in enumerate(tabs):
+            if tab is not None:
+                self._click(*tab)
+                self._sleep(0.7)
+            geom, per_notch = self._scan_tab(g, found, ti, len(tabs), geom, per_notch)
+        return {"perks": found, "all_tabs": len(tabs) > 1, "skipped": self.skipped,
+                "rarities": sorted(self.include, key=bo.RARITIES.index)}
+
+    def _read_cell(self, g, x, y, last):
+        """Click a tile and read the panel: (name, level) - level None when it couldn't be read."""
+        self._check()
+        self._click(x, y)
+        self._sleep(0.2)
+        name, lv = self._read_panel(g)
+        if name is not None and (name, lv) == last:  # the panel may not have changed yet
+            self._sleep(0.25)
+            name, lv = self._read_panel(g)
+        if name is not None and lv is None:
+            self._sleep(0.2)
+            name2, lv2 = self._read_panel(g)
+            if name2 == name and lv2 is not None:
+                lv = lv2
+        return name, lv
+
+    @staticmethod
+    def _border(shot, x, y, size):
+        """A tile's border colour (top and bottom edge, in Lab) - how its rarity shows before it's clicked."""
+        h = int(size / 2)
+        x0, y0, x1, y1 = int(x - h), int(y - h), int(x + h), int(y + h)
+        m = max(2, int(size * 0.06))
+        if x0 - m < 0 or y0 - m < 0 or y1 + m > shot.shape[0] or x1 + m > shot.shape[1]:
+            return None
+        b = max(3, int(size * 0.14))
+
+        def edge(band):
+            px_ = band.reshape(-1, 3)
+            v = px_.max(axis=1)
+            keep = px_[v >= np.percentile(v, 75)]  # the border is the brightest thing along the edge
+            return np.median(keep, axis=0)
+        top = edge(shot[y0 - m:y0 + b, x0 + b:x1 - b])
+        bot = edge(shot[y1 - b:y1 + m, x0 + b:x1 - b])
+        lab = cv2.cvtColor(np.uint8([[top, bot]]), cv2.COLOR_BGR2LAB).astype(float)
+        return lab.reshape(-1)
+
+    def _skip(self, vec):
+        """Skip this tile without clicking it? Only when its border clearly matches a rarity you filtered out (seen
+        at least twice) and clearly doesn't match any rarity you want - never on a guess."""
+        if vec is None or self.include >= set(bo.RARITIES) or not self.samples:
+            return False
+        dist = {}
+        for v, r in self.samples:
+            d = float(np.linalg.norm(v - vec))
+            dist[r] = min(dist.get(r, 1e9), d)
+        best = min(dist, key=dist.get)
+        if best in self.include or sum(1 for _, r in self.samples if r == best) < 2 or dist[best] > 10:
+            return False
+        wanted = [d for r, d in dist.items() if r in self.include]
+        if not wanted:
+            return False  # nothing you want has been seen yet: can't be sure their colours differ
+        return all(d >= max(25.0, 2.5 * dist[best]) for d in wanted)
+
+    def _tile(self, g, shot, x, y, size, last, found, where):
+        """One tile: skip it (filtered rarity) or click it and read it. Returns the last (name, level) read."""
+        vec = self._border(shot, x, y, size)
+        if self._skip(vec):
+            self.skipped += 1
+            return last
+        name, lv = self._read_cell(g, x, y, last)
+        self.reads += 1
+        if name is None:
+            if self.reads >= 4 and self.named == 0:
+                raise ScanProblem("The tiles here aren't perks. In Roblox open Equipment > Perks and click your Body "
+                                  "slot so your perk list shows, then press Scan my perks again.")
+            return last
+        self.named += 1
+        rarity = bo.PERKS[name]["rarity"]
+        if vec is not None:
+            self.samples.append((vec, rarity))
+        lv0 = 0 if lv is None else lv
+        if rarity in self.include:
+            found[name] = max(found.get(name, -1), lv0)
+        self._say("Reading your perks - %s - %d kinds found%s (last: %s +%d)"
+                  % (where, len(found), (", %d skipped by your filter" % self.skipped) if self.skipped else "",
+                     name, lv0))
+        return (name, lv)
+
+    def _scan_tab(self, g, found, ti, ntabs, geom_prev=None, per_notch=None):
+        """Read every tile of the shown tab, top to bottom. Scrolling: how far one wheel notch moves the list is
+        learned once (at the top, where rows differ); after that each move is checked against the notches turned,
+        and when a move can't be told for sure every tile on screen is read again - a row is never skipped.
+        Returns (the grid's shape, px per notch) for the next tabs."""
+        shot = self._shot(g)
+        grid = bo.find_perk_grid(shot) or (bo.find_perk_grid(shot, geom_prev) if geom_prev else None)
+        if grid is None:
+            return geom_prev, per_notch
+        gm = grid["geom"]
+        size, xs, pitch = gm["size"], gm["xs"], gm["pitch_y"]
+        h = shot.shape[0]
+        area = (max(0, int(xs[0] - size * 0.6)), max(0, int(gm["top"])), int(xs[-1] + size * 0.6),
+                min(h, int(grid["bottom"] + size * 0.3)))
+        cx, cy = (area[0] + area[2]) // 2, (area[1] + area[3]) // 2
+        self._wheel_at(cx, cy, 40)  # start at the top of the list
+        shot = self._settled(g, area)
+        top_grid = bo.find_perk_grid(shot)  # at the top: the list's real start
+        if top_grid is not None:
+            gm = top_grid["geom"]
+        rows_visible = max(1.0, (area[3] - area[1]) / pitch)
+        careful = False  # can't tell how far a notch scrolls: one notch at a time, every tile read each time
+        notches = 1 if per_notch is None else max(1, int(((rows_visible - 1.3) * pitch) // max(1.0, per_notch)))
+        new_below = None  # after a scroll: only cells below this y are new
+        last = None
+        for page in range(self.MAX_PAGES):
+            grid = bo.find_perk_grid(shot, gm)
+            if grid is None:
+                break
+            for (x, y) in grid["cells"]:
+                if new_below is not None and y <= new_below:
+                    continue
+                last = self._tile(g, shot, x, y, gm["size"], last, found,
+                                  "tab %d of %d, page %d" % (ti + 1, ntabs, page + 1))
+            x0, y0, x1, y1 = area
+            self._check()
+            self._put_mouse(cx, cy)  # the mouse goes where it will scroll first: a hover look is in both pictures
+            self._sleep(0.15)
+            before = self._shot(g)[y0:y1, x0:x1].copy()
+            max_y = max(c[1] for c in grid["cells"])
+            self._wheel_at(cx, cy, -notches)
+            shot = self._settled(g, area)
+            after = shot[y0:y1, x0:x1]
+            if float(np.mean(cv2.absdiff(before, after))) < 1.5:
+                # nothing moved: the end of the list. The last move may have been cut short by the end, so read
+                # every tile on screen once more (a row hidden by a short move would be here)
+                if new_below is not None:
+                    g2 = bo.find_perk_grid(shot, gm)
+                    for (x, y) in (g2["cells"] if g2 else []):
+                        last = self._tile(g, shot, x, y, gm["size"], last, found, "tab %d of %d, end" % (ti + 1, ntabs))
+                break
+            if careful:  # try to learn the notch again; until then read everything on screen each time
+                moved = self._measure_scroll(before, after, pitch)
+                if moved is None or moved <= 0:
+                    new_below = None
+                    continue
+                careful, per_notch = False, float(moved)
+                new_below = max_y - moved + pitch * 0.5
+                notches = max(1, int(((rows_visible - 1.3) * pitch) // per_notch))
+                continue
+            if per_notch is None:  # learn how far one notch scrolls
+                moved = self._measure_scroll(before, after, pitch)
+                if moved is None or moved <= 0:
+                    careful, new_below = True, None
+                    continue
+                per_notch = float(moved)
+                notches = max(1, int(((rows_visible - 1.3) * pitch) // per_notch))
+            else:
+                moved = self._measure_scroll(before, after, pitch, notches * per_notch)
+                if moved is None:
+                    new_below = None  # stopped short (the end) or unclear: read everything on screen again
+                    continue
+            new_below = max_y - moved + pitch * 0.5
+        return gm, per_notch
+
+
 class App:
     def __init__(self, headless=False):
         self.headless = headless
@@ -5858,6 +6483,7 @@ class App:
         self.discord = Discord(self.cfg, lambda t: self.q.put(("log", t)), lambda cmd: self.q.put(("bot", cmd)),
                                lambda: pick_monitor(self.cfg))
         self.engine = Engine(self.cfg, self.q, self.discord)
+        self.scanner = BuildScanner(self.cfg, self.q)
         self.binding = False
         self.settings = None
         self.now_title = "Ready"
@@ -5933,7 +6559,7 @@ class App:
             label(side, text, 7, DIM, True, bg=SIDE).pack(anchor="w", padx=px(22), pady=(px(6), px(6)))
 
         section("MACRO")
-        for key in ("Dashboard", "Build", "Runs", "Graph", "Loot", "Stats"):
+        for key in ("Optimiser", "Dashboard", "Build", "Runs", "Graph", "Loot", "Stats"):
             item = NavItem(side, key, lambda k=key: self.show_tab(k), nav_w)
             item.pack(padx=px(14), pady=px(1))
             self.nav[key] = item
@@ -6144,6 +6770,7 @@ class App:
         # ---- Appearance ----
         self.build_appearance()
         self.build_build_page()
+        self.build_optimiser_page()
 
         self.refresh_runs()
         self.show_tab("Dashboard")
@@ -6210,6 +6837,339 @@ class App:
 
     def open_tour(self):
         GuideWindow(self, APP_TOUR.splitlines(), "How to use the app")
+
+    # ---- Build optimiser ----
+    def build_optimiser_page(self):
+        page = tk.Frame(self.tab_card, bg=BG)
+        self.tabs["Optimiser"] = page
+        o = self.cfg["optimiser"]
+        top = card(page)
+        top.pack(fill="x")
+        row = tk.Frame(top, bg=CARD)
+        row.pack(fill="x", padx=px(20), pady=(px(16), px(10)))
+        self.opt_ps = tk.StringVar(value=o["playstyle"])
+        Segmented(row, self.opt_ps, bo.PLAYSTYLES, command=lambda v: self.on_opt_setting()).pack(side="left")
+        small = dict(padx=px(14), pady=px(7), font=(FONT_SEMI, 9), radius=px(9))
+        Btn(row, "How to use", self.open_opt_tutorial, "ghost", **small).pack(side="right")
+        Btn(row, "Edit list", self.open_opt_edit, "ghost", **small).pack(side="right")
+        self.opt_mem_btn = Btn(row, "Scan memories", lambda: self.start_scan("memories"), "normal", **small)
+        self.opt_mem_btn.pack(side="right", padx=(0, px(6)))
+        self.opt_scan_btn = Btn(row, "Scan my perks", lambda: self.start_scan("perks"), "primary", **small)
+        self.opt_scan_btn.pack(side="right", padx=(0, px(6)))
+        row2 = tk.Frame(top, bg=CARD)
+        row2.pack(fill="x", padx=px(20), pady=(0, px(14)))
+        label(row2, "FAMILY", 7, DIM, True).pack(side="left")
+        self.opt_family = tk.StringVar(value=o["family"])
+        Dropdown(row2, self.opt_family, bo.FAMILIES, command=lambda v: self.on_opt_setting()).pack(
+            side="left", padx=(px(8), px(20)))
+        label(row2, "CAPSTONES UNLOCKED", 7, DIM, True).pack(side="left")
+        self.opt_caps = {}
+        for cat in ("Offense", "Defense", "Support"):
+            v = tk.BooleanVar(value=cat in o["capstones"])
+            self.opt_caps[cat] = v
+            Toggle(row2, v, command=self.on_opt_setting).pack(side="left", padx=(px(10), px(5)))
+            label(row2, cat, 9, MUTED).pack(side="left")
+        row3 = tk.Frame(top, bg=CARD)
+        row3.pack(fill="x", padx=px(20), pady=(0, px(14)))
+        label(row3, "SCAN", 7, DIM, True).pack(side="left")
+        self.opt_rar_pills = {}
+        for r in bo.RARITIES:
+            pill = Pill(row3, font=(FONT_SEMI, 8))
+            pill.configure(cursor="hand2")
+            pill.pack(side="left", padx=(px(8) if r == bo.RARITIES[0] else px(5), 0))
+            pill.bind("<Button-1>", lambda e, r_=r: self.toggle_scan_rarity(r_))
+            self.opt_rar_pills[r] = pill
+        self.opt_rar_note = label(row3, "", 8, DIM)
+        self.opt_rar_note.pack(side="left", padx=(px(10), 0))
+        self.draw_scan_rarities()
+        self.opt_status = label(row3, "", 8, DIM)
+        self.opt_status.pack(side="right")
+        self.opt_scroll = ScrollFrame(page)
+        self.opt_scroll.pack(fill="both", expand=True, pady=(px(14), 0))
+        self.opt_board = None
+        self.refresh_optimiser()
+        self.update_scan_buttons()
+
+    @staticmethod
+    def autowrap(frame, labels, pad=None):
+        """Wrap these labels to the frame's real width (it changes with the window). The margin is bigger than a
+        label's own border, so a frame that sizes itself to its labels can only shrink - never grow forever."""
+        pad = px(10) if pad is None else pad
+
+        def on(e):
+            w = max(px(40), e.width - pad)
+            for lb in labels:
+                try:
+                    if abs(int(lb.cget("wraplength")) - w) > 2:
+                        lb.configure(wraplength=w)
+                except tk.TclError:
+                    pass
+        frame.bind("<Configure>", on, add="+")
+
+    def draw_scan_rarities(self):
+        on = set(self.cfg["optimiser"]["scan_rarities"])
+        light = UI.get("light")
+        for r, pill in self.opt_rar_pills.items():
+            col = bo.RARITY_COLOR[r]
+            col = mix(col, "#000000", 0.3) if light else col
+            if r in on:
+                pill.set(r, mix(CARD, col, 0.22), col)
+            else:
+                pill.set(r, CARD2, DIM)
+        off = [r for r in bo.RARITIES if r not in on]
+        self.opt_rar_note.configure(text=("skipped: " + ", ".join(off) + " - click to scan them too") if off else
+                                    "every rarity is scanned")
+
+    def toggle_scan_rarity(self, r):
+        on = self.cfg["optimiser"]["scan_rarities"]
+        if r in on:
+            if len(on) == 1:
+                return  # something has to be scanned
+            on.remove(r)
+        else:
+            on.append(r)
+        self.cfg["optimiser"]["scan_rarities"] = [x for x in bo.RARITIES if x in on]
+        save_config(self.cfg)
+        self.draw_scan_rarities()
+        self.refresh_optimiser()
+
+    def open_opt_tutorial(self):
+        GuideWindow(self, OPT_TUTORIAL.splitlines(), "Build optimiser - how to use it")
+
+    def opt_owned(self):
+        o = self.cfg["optimiser"]
+        return dict(o["perks"]), set(o["memories"])
+
+    def on_opt_setting(self):
+        o = self.cfg["optimiser"]
+        o["playstyle"] = self.opt_ps.get()
+        o["family"] = self.opt_family.get()
+        o["capstones"] = [c for c, v in self.opt_caps.items() if v.get()]
+        save_config(self.cfg)
+        self.refresh_optimiser()
+
+    def refresh_optimiser(self):
+        if getattr(self, "opt_scroll", None) is None:
+            return
+        if self.opt_board is not None:
+            self.opt_board.destroy()
+        o = self.cfg["optimiser"]
+        ps, fam, caps = o["playstyle"], o["family"], tuple(o["capstones"])
+        perks, mems = self.opt_owned()
+        scanned = bool(perks)
+        if scanned:
+            build = bo.best_build(ps, perks, mems, fam, caps)
+            nxt = bo.get_next(build, perks, mems, fam, caps, rarities=set(o["scan_rarities"]))
+            why = bo.reasons(build, perks)
+        else:
+            allp, allm = bo.ideal_owned()
+            build = bo.best_build(ps, allp, allm, fam, caps)
+            nxt, why = [], []
+        board = tk.Frame(self.opt_scroll.inner, bg=BG)
+        board.pack(fill="both", expand=True)
+        self.opt_board = board
+        light = UI.get("light")
+
+        def rcol(rarity):
+            c = bo.RARITY_COLOR.get(rarity, TEXT)
+            return mix(c, "#000000", 0.3) if light else c
+
+        head = tk.Frame(board, bg=BG)
+        head.pack(fill="x", pady=(0, px(8)))
+        label(head, ("BEST BUILD FROM WHAT YOU OWN - %s" % ps.upper()) if scanned else
+              ("BEST POSSIBLE BUILD - %s" % ps.upper()), 8, ACCENT, True).pack(side="left")
+        if not scanned:
+            label(head, "every perk at +10 - scan your perks to see your own", 8, DIM).pack(side="left", padx=(px(10), 0))
+        if o["scanned_at"]:
+            label(head, "%d perks, %d memories - scanned %s" % (
+                len(perks), len(mems), time.strftime("%d %b %H:%M", time.localtime(o["scanned_at"]))),
+                8, DIM).pack(side="right")
+        tiles = tk.Frame(board, bg=BG)
+        tiles.pack(fill="x")
+        n = len(build.slots)
+        for i, (slot, c) in enumerate(zip(build.slots, build.chosen)):
+            divine = bool(c) and bo.PERKS[c[0]]["rarity"] == "Divine"
+            gold = rcol("Divine")
+            t = RoundCard(tiles, fill=CARD, edge=(gold, gold) if divine else (EDGE_HI, EDGE))
+            t.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else px(10), 0))
+            tiles.grid_columnconfigure(i, weight=1, uniform="slot")
+            inner = tk.Frame(t, bg=CARD)
+            inner.pack(fill="both", expand=True, padx=px(14), pady=px(12))
+            wrap = [label(inner, slot.name.upper(), 7, DIM, True, wraplength=px(60), justify="left")]
+            wrap[0].pack(anchor="w")
+            if not c:
+                wrap.append(label(inner, "Nothing for this slot", 10, DIM, wraplength=px(60), justify="left"))
+                wrap[-1].pack(anchor="w", pady=(px(8), 0))
+                self.autowrap(inner, wrap)
+                continue
+            name, lv = c
+            p = bo.PERKS[name]
+            wrap.append(label(inner, name, 11, rcol(p["rarity"]), True, wraplength=px(60), justify="left"))
+            wrap[-1].pack(anchor="w", pady=(px(5), 0))
+            wrap.append(label(inner, "%s  -  +%d" % (p["rarity"], lv), 8, MUTED, wraplength=px(60), justify="left"))
+            wrap[-1].pack(anchor="w")
+            for line in bo.perk_lines(name, lv, 2, ps):
+                wrap.append(label(inner, line, 8, mix(TEXT, MUTED, 0.35), wraplength=px(60), justify="left"))
+                wrap[-1].pack(anchor="w", pady=(px(4), 0))
+            self.autowrap(inner, wrap)
+        low = tk.Frame(board, bg=BG)
+        low.pack(fill="x", pady=(px(12), 0))
+        low.grid_columnconfigure(0, weight=3, uniform="low")
+        low.grid_columnconfigure(1, weight=2, uniform="low")
+        left = card(low)
+        left.grid(row=0, column=0, sticky="nsew")
+        lin = tk.Frame(left, bg=CARD)
+        lin.pack(fill="both", expand=True, padx=px(20), pady=px(16))
+        label(lin, "MEMORIES", 7, ACCENT, True).pack(anchor="w")
+        chips = tk.Frame(lin, bg=CARD)
+        chips.pack(anchor="w", fill="x", pady=(px(8), 0))
+        required = bo.RULES[ps]["memories"]
+        if build.memories:
+            rowc = None
+            for j, m in enumerate(build.memories):
+                if j % 3 == 0:
+                    rowc = tk.Frame(chips, bg=CARD)
+                    rowc.pack(anchor="w")
+                pill = Pill(rowc, font=(FONT_SEMI, 8))
+                req = m in required
+                pill.set(m + ("  -  required" if req else ""), mix(CARD, GOOD, 0.18) if req else CARD2,
+                         GOOD if req else TEXT)
+                pill.pack(side="left", padx=(0, px(6)), pady=(0, px(6)))
+        else:
+            nm = label(chips, "No memories yet - open Equipment > Prestige in Roblox and press Scan memories.", 9, DIM,
+                       wraplength=px(200), justify="left")
+            nm.pack(anchor="w")
+            self.autowrap(chips, [nm])
+        label(lin, "WHY THIS BUILD", 7, ACCENT, True).pack(anchor="w", pady=(px(12), px(4)))
+        lines = why or (["The strongest perk for each slot at +10, using the game's numbers for %s and the "
+                          "macro's rules." % ps] if not scanned else ["Every perk you own was checked in every slot "
+                                                                     "it fits."])
+        never = bo.RULES[ps]["never"]["perks"]
+        if never and not scanned:
+            lines.append("Never used for %s: %s (they change how you move, which the routines rely on)."
+                         % (ps, ", ".join(never)))
+        why_lbls = []
+        for s in lines:
+            why_lbls.append(label(lin, s, 9, mix(TEXT, MUTED, 0.25), wraplength=px(200), justify="left"))
+            why_lbls[-1].pack(anchor="w", pady=(0, px(3)))
+        self.autowrap(lin, why_lbls)
+        right = card(low)
+        right.grid(row=0, column=1, sticky="nsew", padx=(px(12), 0))
+        rin = tk.Frame(right, bg=CARD)
+        rin.pack(fill="both", expand=True, padx=px(20), pady=px(16))
+        label(rin, "GET NEXT", 7, ACCENT, True).pack(anchor="w")
+        if not scanned:
+            steps = ["In Roblox open Equipment > Perks and click your Body slot - the perk list shows.",
+                     "Press Scan my perks. The macro clicks each perk and reads it (Stop key or mouse in the "
+                     "top-left corner stops it).",
+                     "Open Equipment > Prestige and press Scan memories (and again on the memory Storage).",
+                     "Set your family and unlocked capstones above."]
+            for j, s in enumerate(steps):
+                r = tk.Frame(rin, bg=CARD)
+                r.pack(fill="x", pady=(px(8), 0))
+                num = Pill(r, font=(FONT_SEMI, 8))
+                num.set(str(j + 1), ACCENT_BG, ACCENT_SOFT)
+                num.pack(side="left", anchor="n")
+                tf = tk.Frame(r, bg=CARD)
+                tf.pack(side="left", fill="x", expand=True, padx=(px(8), 0))
+                st = label(tf, s, 9, TEXT, wraplength=px(120), justify="left")
+                st.pack(anchor="w")
+                self.autowrap(tf, [st])
+        elif not nxt:
+            done = label(rin, "Nothing left to get - this is the best %s build there is." % ps, 9, MUTED,
+                         wraplength=px(150), justify="left")
+            done.pack(anchor="w", pady=(px(8), 0))
+            self.autowrap(rin, [done])
+        for j, r in enumerate(nxt):
+            rowf = tk.Frame(rin, bg=CARD)
+            rowf.pack(fill="x", pady=(px(10), 0))
+            num = Pill(rowf, font=(FONT_SEMI, 8))
+            num.set(str(j + 1), mix(CARD, BAD, 0.2) if r["required"] else ACCENT_BG, BAD if r["required"] else ACCENT_SOFT)
+            num.pack(side="left", anchor="n")
+            gain = "required" if r["required"] else "+%d%%" % round(r["gain"])
+            label(rowf, gain, 10, BAD if r["required"] else GOOD, True).pack(side="right", anchor="n",
+                                                                           padx=(px(8), 0))
+            txt = tk.Frame(rowf, bg=CARD)
+            txt.pack(side="left", fill="x", expand=True, padx=(px(8), 0))
+            t1 = label(txt, r["title"], 10, TEXT, True, wraplength=px(120), justify="left")
+            t1.pack(anchor="w")
+            t2 = label(txt, r["detail"], 8, MUTED, wraplength=px(120), justify="left")
+            t2.pack(anchor="w")
+            self.autowrap(txt, [t1, t2])
+        if scanned and nxt:
+            label(rin, "%% = how much stronger your %s build gets." % ps, 7, DIM).pack(anchor="w", pady=(px(12), 0))
+        redraw_cards(board)
+
+    def update_scan_buttons(self):
+        if getattr(self, "opt_scan_btn", None) is None:
+            return
+        scanning = self.scanner.running()
+        b = self.opt_scan_btn
+        if scanning:
+            b.style_name, b.command = "danger", self.stop_scan
+            b.set_text("Stop scan")
+            b.set_enabled(True)
+        else:
+            b.style_name, b.command = "primary", lambda: self.start_scan("perks")
+            b.set_text("Scan my perks")
+            b.set_enabled(not self.engine.running())
+        self.opt_mem_btn.set_enabled(not scanning and not self.engine.running())
+
+    def stop_scan(self):
+        if self.scanner.running():
+            self.scanner.stop()
+            self.opt_status.configure(text="Stopping the scan...")
+
+    def start_scan(self, what):
+        if self.engine.running():
+            self.add_log("Stop the macro first - the scan uses the mouse")
+            return
+        if self.scanner.start(what):
+            stop_key = key_display(self.cfg["keys"].get("scan_stop", "esc"))
+            self.scan_progress = "Scanning your %s..." % what
+            self.opt_status.configure(text="Scanning - press %s or move the mouse to stop it" % stop_key)
+            self.mini.show()  # on top of Roblox: what it's doing and how to stop it
+            self.add_log("Build optimiser: reading your %s from the game..." % what)
+            self.update_scan_buttons()
+
+    def scan_done(self, res):
+        if not self.engine.running():
+            self.mini.hide()
+        o = self.cfg["optimiser"]
+        if res.get("ok"):
+            if res["what"] == "perks":
+                perks = res.get("perks") or {}
+                if res.get("all_tabs"):
+                    o["perks"] = perks  # every tab was read: this is the whole list
+                else:
+                    for n, lv in perks.items():
+                        o["perks"][n] = max(o["perks"].get(n, -1), lv)
+                o["scanned_at"] = time.time()
+                msg = "Read %d kinds of perks in %s" % (len(perks), fmt_dur(res.get("seconds", 0)))
+                if res.get("skipped"):
+                    msg += ", %d tiles skipped by your filter" % res["skipped"]
+                if not res.get("all_tabs"):
+                    msg += " (one category - open the next tab in Roblox and scan again to add it)"
+            else:
+                got = res.get("memories") or []
+                o["memories"] = [m for m in bo.MEMORIES if m in set(o["memories"]) | set(got)]
+                o["memories_at"] = time.time()
+                msg = "Read %d memories: %s" % (len(got), ", ".join(got))
+            save_config(self.cfg)
+            self.add_log("Build optimiser: " + msg)
+            self.opt_status.configure(text=msg if len(msg) < 90 else msg[:87] + "...")
+        else:
+            self.add_log("Build optimiser: " + res.get("error", "scan failed"))
+            self.opt_status.configure(text=res.get("error", "scan failed")[:90])
+        self.update_scan_buttons()
+        self.refresh_optimiser()
+        try:
+            present(self.root)
+        except Exception:
+            pass
+
+    def open_opt_edit(self):
+        OptimiserEditWindow(self)
 
     def build_appearance(self):
         page = tk.Frame(self.tab_card, bg=BG)
@@ -6354,6 +7314,10 @@ class App:
         else:
             self.subtitle.configure(text=PAGE_SUBTITLES.get(name, ""))
         redraw_cards(self.tabs[name])
+        if name == "Optimiser" and not self.cfg["optimiser"].get("tutorial_seen") and not self.headless:
+            self.cfg["optimiser"]["tutorial_seen"] = True
+            save_config(self.cfg)
+            self.root.after(250, self.open_opt_tutorial)
         if name == "Graph":
             self.schedule_graph()
 
@@ -6482,6 +7446,7 @@ class App:
         self.stop_btn.set_enabled(running)
         self.routine_seg.set_enabled(not running)
         self.refresh_hotkey_labels()
+        self.update_scan_buttons()
 
     def add_log(self, text):
         ts = time.strftime("%H:%M:%S")
@@ -6705,6 +7670,9 @@ class App:
 
     # ---- actions -----------------------------------------------------------------------------
     def on_start(self):
+        if self.scanner.running():
+            self.add_log("A build scan is running - wait for it or press Stop")
+            return
         if self.engine.running():
             if self.engine.state == "waiting":
                 self.engine.request_manual_start()
@@ -6737,6 +7705,8 @@ class App:
             self.refresh_hotkey_labels()
 
     def on_stop(self):
+        if self.scanner.running():
+            self.scanner.stop()
         if self.engine.running():
             self.add_log("Stopping...")
             self.engine.stop()
@@ -6952,6 +7922,13 @@ class App:
                         self.restore_window()
                 elif kind == "hotkey":
                     self.on_hotkey(msg[1])
+                elif kind == "opt_progress":
+                    self.scan_progress = msg[1].replace("Reading your perks - ", "Scanning - ")
+                    if getattr(self, "opt_status", None) is not None:
+                        self.opt_status.configure(text=msg[1])
+                    self.mini.update()
+                elif kind == "opt_done":
+                    self.scan_done(msg[1])
                 elif kind == "bot":
                     self.on_bot_command(msg[1])
                 elif kind == "run":
@@ -6973,6 +7950,8 @@ class App:
             self.on_pause()
         elif action == "stop":
             self.on_stop()
+        elif action == "scan_stop":
+            self.stop_scan()
 
     def hotkey_loop(self):
         prev = {}
@@ -7041,7 +8020,8 @@ def selftest(out_path):
             app.retheme()
         app.cfg["app"]["theme"] = "Midnight"
         app.retheme()
-        ok("every theme builds", set(app.tabs) == {"Dashboard", "Build", "Runs", "Graph", "Loot", "Stats", "Appearance"} and app.tab_var.get() in app.tabs)
+        ok("every theme builds", set(app.tabs) == {"Optimiser", "Dashboard", "Build", "Runs", "Graph", "Loot", "Stats",
+                                                   "Appearance"} and app.tab_var.get() in app.tabs)
         app.open_settings()
         app.settings.top.withdraw()
         for page in SettingsWindow.NAV:
@@ -7056,6 +8036,35 @@ def selftest(out_path):
         t = GuideWindow(app, APP_TOUR.splitlines(), "How to use the app")
         t.top.withdraw()
         ok("app tour builds", True)
+        t2 = GuideWindow(app, OPT_TUTORIAL.splitlines(), "Build optimiser - how to use it")
+        t2.top.withdraw()
+        ok("optimiser tutorial builds, with its picture", len(t2.images) == 1, "%d picture(s)" % len(t2.images))
+        saved_opt = json.loads(json.dumps(app.cfg["optimiser"]))  # nothing here is saved to your settings
+        for ps_ in bo.PLAYSTYLES:
+            app.cfg["optimiser"]["playstyle"] = ps_
+            app.refresh_optimiser()
+        app.cfg["optimiser"]["perks"] = {"Warchief": 3, "Immortal": 5}
+        app.refresh_optimiser()
+        app.cfg["optimiser"] = saved_opt
+        app.refresh_optimiser()
+        ok("build optimiser page builds (every playstyle, scanned and not)", "Optimiser" in app.tabs)
+        b_ = bo.best_build("Thunder Spear", *bo.ideal_owned())
+        ok("build optimiser solves", [c[0] for c in b_.chosen if c] == ["Godforged", "Kengo", "Immortal", "Munitions Master"],
+           ", ".join(c[0] for c in b_.chosen if c))
+        ok("screen reading (Windows text recognition) available", bo.ocr_available(),
+           "" if bo.ocr_available() else str(bo._OCR_IMPORT_ERROR or "no OCR language"))
+        try:  # read a perk name off a picture, like the scan does
+            pic = Image.new("RGB", (900, 220), (20, 20, 26))
+            try:
+                fnt = ImageFont.truetype("seguisb.ttf", 46)
+            except Exception:
+                fnt = ImageFont.load_default()
+            ImageDraw.Draw(pic).text((40, 40), "AVATAR OF YMIR", font=fnt, fill=(235, 235, 235))
+            ImageDraw.Draw(pic).text((40, 130), "+10", font=fnt, fill=(235, 235, 235))
+            got = bo.read_perk_panel(bo.ocr_lines(cv2.cvtColor(np.array(pic), cv2.COLOR_RGB2BGR)))
+            ok("screen reading reads a perk name and level", got == ("Avatar of Ymir", 10), str(got))
+        except Exception as e:
+            ok("screen reading reads a perk name and level", False, "%s: %s" % (type(e).__name__, e))
         ok("build page for every routine", set(ROUTINES) <= set(BUILDS) and all(
             os.path.isfile(resource_path("assets", "layouts", BUILDS[r]["layout"] + ".png")) for r in BUILDS))
         url, body, headers = build_discord_request(dict(DEFAULT_DISCORD, mode="webhook", url="https://discord.com/api/webhooks/1/x"),

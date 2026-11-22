@@ -1,10 +1,11 @@
-# Colossal Macro - v1.1 (beta)
+# Colossal Macro - v1.2 (beta)
 
 Grind macro for **Attack on Titan Revolution** (Roblox), built for Colossal users. Windows app (one `.exe`, nothing to install).
 
 **Download:** the exe is on the [Releases](../../releases) page. How to use it: [HOW TO USE.txt](HOW%20TO%20USE.txt) (also inside the app: Guide).
 
 ## What it does
+- **Build optimiser:** pick Shifter, Thunder Spear or ODM - it reads your perks and memories off the game's menus and shows the best build you can equip, slot by slot, plus the 3 upgrades that would make it strongest.
 - Routines: Blood Awakening (Colossal), Shiki, Universal (thunder spears), Female Raid.
 - Smart waits: sees when you're shifted and when the shifted ability 4 has gone off, instead of fixed waits.
 - Speed finder: tests shorter dash / strafe times and keeps only what is really faster.
@@ -55,7 +56,7 @@ Put your skills on these keys (or change the keys in the app: Settings > Keybind
 Needs Python 3 on Windows:
 
 ```
-python -m pip install pyinstaller opencv-python numpy pillow
+python -m pip install pyinstaller opencv-python numpy pillow winrt-runtime winrt-Windows.Media.Ocr winrt-Windows.Graphics.Imaging winrt-Windows.Storage.Streams winrt-Windows.Foundation winrt-Windows.Foundation.Collections winrt-Windows.Globalization
 build.bat
 ```
 
