@@ -2,9 +2,9 @@
 Colossal Macro - grind macro for Attack on Titan Revolution (Roblox).
 
 Routines (pick one in the app):
-    Blood Awakening  ability 2 -> dash -> strafe left -> shift (ability 5) -> shifted ability 4 -> ability 5 loop
-    Shiki            ability 2 -> dash -> strafe -> ability 3 -> buy time until ability 4 -> ability 4 -> shift ...
-    Universal        ability 2 -> dash -> strafe -> ability 3 -> look down -> ability 4 -> shift ...
+    Blood Awakening  ability 2 -> look up -> dash -> strafe left -> shift (ability 5) -> shifted ability 4 -> ability 5 loop
+    Shiki            ability 2 -> look up -> dash -> strafe -> ability 3 -> buy time until ability 4 -> ability 4 -> shift ...
+    Universal        ability 2 -> look up -> dash -> strafe -> ability 3 -> look down -> ability 4 -> shift ...
     Female Raid      skip cutscenes, buffs, shift, ability cycle, heatwave, open the chests, finish
 Every mission / raid ends with the retry button: the macro reads the result + loot, clicks retry and goes again.
 
@@ -1688,8 +1688,11 @@ FIELDS = {
     "Shared": [
         Field("Start", "fix_shift_lock", "Fix shift lock at start", "bool", False,
               help="On: the shift-lock key is pressed once the moment the mission starts, before anything else."),
-        Field("Start", "look_up", "Look up at the start", "bool", False,
-              help="On: shift-lock key, the mouse moves up a bit, shift-lock key again - the very first thing."),
+        Field("Start", "look_up_dash", "Look up before dashing", "bool", True,
+              help="On (Blood Awakening, Shiki, Universal): right before the dashing starts the camera tilts up "
+                   "(shift-lock key, mouse up, shift-lock key), so the dash goes up and reaches the titans without "
+                   "the Feathered Bicorn. It's done in the last part of 'Wait after ability 2', so it adds no time. "
+                   "Turn it off if your dash already goes where it should."),
         Field("Start", "look_up_time", "Look up total time", "sec", 0.5, 0.2, 5,
               "The whole look up (both shift-lock presses and the mouse move) takes this long."),
         Field("Start", "look_up_pixels", "Look up amount", "pix", 150, 1, 2000, "How far the mouse moves up, in pixels."),
@@ -2928,12 +2931,9 @@ class Engine:
             self.show("Fixing shift lock", "%s once" % key_display(self.k("lock")))
             self.log("Fix shift lock: %s pressed once" % key_display(self.k("lock")))
             self.fix_shift_lock()
-        if self.sh("look_up"):
-            self.show("Looking up", "Shift lock, mouse up, shift lock")
-            self.log("Looking up (%gs, %dpx)" % (self.sh("look_up_time"), self.sh("look_up_pixels")))
-            self.look_up(self.sh("look_up_time"), self.sh("look_up_pixels"))
 
         self.set_step("Ability 2")
+        look_time = self.sh("look_up_time") if self.sh("look_up_dash") else 0.0
         if self.rt("skip_ability2"):
             self.show("Ability 2", "Skipped (Skip ability 2 is on)")
             self.log("Ability 2 skipped")
@@ -2941,7 +2941,11 @@ class Engine:
             self.show("Ability 2", "Pressing %s" % key_display(self.k("ability2")))
             self.log("Ability 2")
             self.tap(self.k("ability2"))
-            self.wait(self.sh("after_ability2"))
+            self.wait(max(0.0, self.sh("after_ability2") - look_time))  # the look up is the end of this wait
+        if look_time:
+            self.show("Looking up", "So the dash goes up - shift lock, mouse up, shift lock")
+            self.log("Looking up before dashing (%gs, %dpx)" % (look_time, self.sh("look_up_pixels")))
+            self.look_up(look_time, self.sh("look_up_pixels"))
 
         self.set_step("Dashing")
         self.log("Dashing for %gs" % self.sh("dash_time"))

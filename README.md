@@ -16,6 +16,8 @@ Grind macro for **Attack on Titan Revolution** (Roblox), built for Colossal user
 ## Builds and skill layouts
 Put your skills on these keys (or change the keys in the app: Settings > Keybinds). Each picture shows the human bar (killing titans) and the bar once you've shifted. For every routine avoid the perks **Adaptation**, **Tatsujin** and **Wings of Freedom**, and the **Flashsteps** memory.
 
+No **Feathered Bicorn**? No problem: Blood Awakening, Shiki and Universal look up right before the opening dash so it still reaches the titans (on by default; Settings > Timings > Shared > Look up before dashing / Look up amount).
+
 ### Blood Awakening
 ![Blood Awakening skill layout](assets/layouts/blood.png)
 - **Family:** any (Shiki for luck, Fritz for extra gems)
