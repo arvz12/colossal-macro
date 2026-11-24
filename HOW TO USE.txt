@@ -3,7 +3,7 @@ Grind macro for Attack on Titan Revolution (Roblox). Four routines: Blood Awaken
 ===========================================================================
 
 ## The window
-A sidebar on the left: Build optimiser (your best build and what to get next), Dashboard (live run, timer, stats, activity log), Your build, Runs, Analytics (graph), Loot and All-time stats; at the bottom Appearance, Settings and the Guide. Appearance: pick a theme (Midnight, Graphite, Ocean, Forest, Crimson, Light) and any accent colour (presets or Custom...). It changes right away and is saved.
+A sidebar on the left: Build optimiser (your best build and what to get next), Dashboard (live run, timer, stats, activity log), Your build, Runs, Analytics (graph), Loot and All-time stats; at the bottom Appearance, Settings, the Guide and Feedback. Appearance: pick a theme (Midnight, Graphite, Ocean, Forest, Crimson, Light) and any accent colour (presets or Custom...). It changes right away and is saved.
 
 ## Quick start
 1. Open Colossal Macro.exe. (Windows may say "Windows protected your PC" the first time - click More info > Run anyway. It does that for any new app that isn't signed.)
@@ -147,6 +147,7 @@ Settings > Reconnect. When Roblox shows its Disconnected message, the failsafe h
 - Keys go to the wrong window: leave "Bring Roblox to the front" on (Settings > App), or click into Roblox after pressing Start.
 - Stuck missions: after 120 seconds the failsafe spams ability 2 (eject), waits, then clicks the screen until the retry button shows up. Change the time or the click spot in Settings > Failsafe. The Female Raid has its own 3 minute limit.
 - Something odd happened: Documents\Colossal Macro\last_session_log.txt has everything the macro did.
+- Tell us: press Feedback (bottom of the sidebar), write what happened (or your idea), and press Open on GitHub. It opens a filled-in GitHub issue (app version and routine added) - press Submit new issue there (free GitHub account). Turn on "Attach my activity log" for bugs; your Windows name, links and Discord ids are taken out. GitHub issues are public, so don't write passwords or personal info.
 
 ## Sharing with friends
 Just send them Colossal Macro.exe. Nothing to install. Each person's settings, pictures and stats are saved in Documents\Colossal Macro (config.json, pictures, last_session_log.txt).

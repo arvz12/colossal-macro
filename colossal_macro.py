@@ -27,8 +27,10 @@ import threading
 import time
 import traceback
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
+import webbrowser
 from ctypes import wintypes
 
 import tkinter as tk
@@ -90,6 +92,10 @@ PICTURES_DIR = os.path.join(DATA_DIR, "pictures")
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 LOG_PATH = os.path.join(DATA_DIR, "last_session_log.txt")
 GUIDE_FILE = "HOW TO USE.txt"
+FEEDBACK_REPO = "arvz12/colossal-macro"  # Feedback opens a filled-in issue here (GitHub emails the owner)
+# GitHub keeps a filled-in issue link through its sign-in page only while the link, encoded once more for the
+# login page, stays under about 7600 characters (tested Nov 2026); 6800 leaves room. The log is cut to fit.
+FEEDBACK_URL_MAX = 6800
 
 
 # =============================================================================
@@ -5816,6 +5822,149 @@ class GuideWindow:
             present(self.top)
 
 
+_PUBLIC_SCRUB = (
+    (re.compile(r"https?://\S+"), "[link]"),
+    (re.compile(r"[\w-]{20,}\.[\w-]{5,}\.[\w-]{20,}"), "[token]"),  # Discord bot tokens
+    (re.compile(r"\b\d{15,21}\b"), "[id]"),  # Discord channel / user ids
+)
+
+
+def scrub_for_public(text):
+    """Feedback becomes a public GitHub issue: take out the home folder / Windows user name, links, tokens and ids."""
+    home = os.path.expanduser("~")
+    if len(home) > 3:
+        text = re.sub(re.escape(home), "~", text, flags=re.IGNORECASE)
+    user = os.environ.get("USERNAME", "")
+    if len(user) >= 3:
+        text = re.sub(r"(?i)(?<![\w])%s(?![\w])" % re.escape(user), "[user]", text)
+    for pat, repl in _PUBLIC_SCRUB:
+        text = pat.sub(repl, text)
+    return text
+
+
+def feedback_issue_url(message, contact, info, log_lines=(), log_title="Activity log", limit=FEEDBACK_URL_MAX):
+    """Link to a new, filled-in issue on the macro's GitHub repo. log_lines are plain text lines (scrubbed here); when
+    they don't all fit, the newest are kept. Returns (url, how many log lines went in). The size that counts is the
+    link encoded again (as the sign-in page carries it), so testers who aren't signed in keep what they wrote."""
+    message = message.strip()
+    contact = contact.strip()
+    base = "https://github.com/%s/issues/new?" % FEEDBACK_REPO
+    lines = [scrub_for_public(l) for l in log_lines]
+
+    def make(msg, n):
+        first = msg.splitlines()[0].strip() if msg else ""
+        title = "Feedback: " + (first[:60] + "..." if len(first) > 60 else first)
+        body = msg + "\n\n" + ("**Contact:** %s\n" % contact if contact else "") + "**App:** " + info
+        if n:
+            body += ("\n\n<details><summary>%s (last %d lines)</summary>\n\n```\n%s\n```\n</details>"
+                     % (log_title, n, "\n".join(lines[-n:])))
+        return base + urllib.parse.urlencode({"title": title, "body": body}, quote_via=urllib.parse.quote)
+
+    def fits(url):
+        return len(urllib.parse.quote(url, safe="")) <= limit
+
+    while not fits(make(message, 0)) and len(message) > 40:  # a very long message: keep its start
+        message = message[:int(len(message) * 0.85)].rstrip() + " ..."
+    lo, hi = 0, len(lines)  # the most log lines that still fit (the link only grows with more lines)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if fits(make(message, mid)):
+            lo = mid
+        else:
+            hi = mid - 1
+    return make(message, lo), lo
+
+
+class FeedbackWindow:
+    """A bug or an idea: opens a filled-in GitHub issue in the browser (GitHub emails the repo owner). The app itself
+    sends nothing - the tester sees everything on GitHub and presses Submit there."""
+
+    def __init__(self, app):
+        self.app = app
+        self.top = tk.Toplevel(app.root)
+        self.top.withdraw()
+        self.top.title("%s - Send feedback" % APP_NAME)
+        self.top.configure(bg=BG)
+        shell = tk.Frame(self.top, bg=BG)
+        shell.pack(fill="both", expand=True, padx=px(16), pady=px(16))
+        label(shell, "Send feedback", 14, TEXT, True).pack(anchor="w")
+        label(shell, "A bug, an idea, anything. It opens on GitHub with this filled in - press Submit new issue there "
+                     "(needs a free GitHub account). Feedback on GitHub is public, so don't write passwords or "
+                     "personal info.", 9, MUTED, wraplength=px(540), justify="left").pack(anchor="w", pady=(px(2), px(12)))
+        c = card(shell)
+        c.pack(fill="both", expand=True)
+        inner = tk.Frame(c, bg=CARD)
+        inner.pack(fill="both", expand=True, padx=px(16), pady=px(14))
+        label(inner, "WHAT HAPPENED, OR YOUR IDEA", 7, ACCENT, True).pack(anchor="w")
+        self.text = tk.Text(inner, height=7, wrap="word", bg=FIELD_BG, fg=TEXT, insertbackground=TEXT, relief="flat",
+                            font=(FONT, 10), highlightthickness=1, highlightbackground=EDGE_HI, highlightcolor=ACCENT,
+                            padx=px(10), pady=px(8), bd=0, selectbackground=ACCENT_BG, selectforeground=TEXT,
+                            insertwidth=1, undo=True)
+        self.text.pack(fill="both", expand=True, pady=(px(6), px(12)))
+        label(inner, "YOUR DISCORD OR ROBLOX NAME (OPTIONAL, SO YOU CAN GET A REPLY)", 7, DIM, True).pack(anchor="w")
+        self.contact = entry(inner, 36)
+        self.contact.pack(fill="x", pady=(px(6), px(12)), ipady=px(4))
+        row = tk.Frame(inner, bg=CARD)
+        row.pack(fill="x")
+        self.attach = tk.BooleanVar(value=False)
+        Toggle(row, self.attach).pack(side="left")
+        label(row, "Attach my activity log", 10, TEXT).pack(side="left", padx=(px(10), 0))
+        label(inner, "Helps find bugs. Your Windows name, links and Discord ids are taken out first.", 8, DIM,
+              wraplength=px(520), justify="left").pack(anchor="w", pady=(px(4), 0))
+        label(inner, "Also added: " + self.info(), 8, DIM).pack(anchor="w", pady=(px(8), 0))
+        foot = tk.Frame(shell, bg=BG)
+        foot.pack(fill="x", pady=(px(12), 0))
+        small = dict(padx=px(16), pady=px(8), font=(FONT_SEMI, 9), radius=px(9))
+        Btn(foot, "Open on GitHub", self.send, "primary", **small).pack(side="right")
+        Btn(foot, "Cancel", self.top.destroy, "ghost", **small).pack(side="right", padx=(0, px(8)))
+        self.note = label(foot, "", 9, MUTED)
+        self.note.pack(side="left")
+        fit_geometry(self.top, px(620), px(580))
+        if not app.headless:
+            present(self.top)
+            self.text.focus_set()
+
+    def info(self):
+        cfg = self.app.cfg
+        routine = cfg["routine"]
+        if routine == "Universal" and cfg["timings"]["Universal"].get("rage"):
+            routine += " (Rage preset)"
+        return "%s %s, routine %s" % (APP_NAME, VERSION, routine)
+
+    def log_lines(self):
+        """This session's log; when it has barely started, the previous session (the one that went wrong) first."""
+        lines = ["%s  %s" % (ts, text) for ts, text in self.app.log_lines]
+        if len(lines) <= 4:
+            try:
+                with open(os.path.join(DATA_DIR, "previous_session_log.txt"), encoding="utf-8", errors="replace") as fh:
+                    prev = [l.rstrip("\n") for l in fh if l.strip()]
+            except OSError:
+                prev = []
+            if prev:
+                lines = ["--- previous session ---"] + prev[-400:] + ["--- this session ---"] + lines
+        return lines
+
+    def send(self):
+        msg = self.text.get("1.0", "end").strip()
+        if not msg:
+            self.note.configure(text="Write what happened or your idea first", fg=WARN)
+            return
+        lines = self.log_lines() if self.attach.get() else []
+        url, n = feedback_issue_url(msg, self.contact.get(), self.info(), lines)
+        try:
+            opened = webbrowser.open(url)
+        except Exception:
+            opened = False
+        if not opened:
+            self.top.clipboard_clear()
+            self.top.clipboard_append(url)
+            self.note.configure(text="Couldn't open your browser - the link is copied, paste it into one", fg=WARN)
+            return
+        self.app.add_log("Feedback opened on GitHub - press Submit new issue there%s"
+                         % (" (log: last %d lines)" % n if lines and n < len(lines) else ""))
+        self.top.destroy()
+
+
 class MiniBar:
     """Small always-on-top rounded status strip while the macro runs."""
 
@@ -5864,7 +6013,7 @@ class MiniBar:
 
 ICON_FONT = "Segoe MDL2 Assets"
 NAV_ICONS = {"Dashboard": "\ue80f", "Runs": "\ue81c", "Graph": "\ue9d2", "Loot": "\ue7b8", "Stats": "\ueb05",
-             "Appearance": "\ue790", "Settings": "\ue713", "Guide": "\ue897"}
+             "Appearance": "\ue790", "Settings": "\ue713", "Guide": "\ue897", "Feedback": "\ue939"}
 NAV_TEXT = {"Graph": "Analytics", "Stats": "All-time stats", "Build": "Your build"}
 NAV_ICONS["Build"] = "\ue8fd"
 NAV_ICONS["Optimiser"] = "\ue735"
@@ -5928,7 +6077,7 @@ APP_TOUR = """# How to use the app
 A quick tour: where everything is, how to read the Guide, and what we recommend.
 
 ## The window
-- Sidebar (left): Build optimiser, Dashboard, Your build, Runs, Analytics, Loot and All-time stats. At the bottom: Appearance (theme and colours), Settings and Guide.
+- Sidebar (left): Build optimiser, Dashboard, Your build, Runs, Analytics, Loot and All-time stats. At the bottom: Appearance (theme and colours), Settings, Guide and Feedback (a bug or an idea - opens a filled-in GitHub issue).
 - Top bar: the page you're on, this tour, the routine picker (Blood Awakening, Shiki, Universal, Female Raid) and the status badge (Idle, Waiting, Running, Paused).
 
 ## Build optimiser
@@ -6578,7 +6727,7 @@ class App:
         bottom.pack(side="bottom", fill="x", pady=(0, px(16)))
         label(bottom, "APP", 7, DIM, True, bg=SIDE).pack(anchor="w", padx=px(22), pady=(0, px(6)))
         for key, cmd in (("Appearance", lambda: self.show_tab("Appearance")), ("Settings", self.open_settings),
-                         ("Guide", self.open_guide)):
+                         ("Guide", self.open_guide), ("Feedback", self.open_feedback)):
             item = NavItem(bottom, key, cmd, nav_w)
             item.pack(padx=px(14), pady=px(1))
             self.nav[key] = item
@@ -7792,6 +7941,9 @@ class App:
     def open_guide(self):
         GuideWindow(self)
 
+    def open_feedback(self):
+        FeedbackWindow(self)
+
     def _all_windows(self):
         wins = [self.root]
         if self.settings is not None and self.settings.top.winfo_exists():
@@ -8078,6 +8230,17 @@ def selftest(out_path):
             ok("screen reading reads a perk name and level", False, "%s: %s" % (type(e).__name__, e))
         ok("build page for every routine", set(ROUTINES) <= set(BUILDS) and all(
             os.path.isfile(resource_path("assets", "layouts", BUILDS[r]["layout"] + ".png")) for r in BUILDS))
+        fw = FeedbackWindow(app)
+        log = ["12:00:%02d  line %d" % (i % 60, i) for i in range(400)] + ["12:01:00  Settings folder: %s" % DATA_DIR]
+        url, n = feedback_issue_url("Next mission not found\nafter retry", "tester", fw.info(), log)
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        ok("feedback window builds; GitHub link fits and hides the Windows name",
+           url.startswith("https://github.com/%s/issues/new?" % FEEDBACK_REPO)
+           and len(urllib.parse.quote(url, safe="")) <= FEEDBACK_URL_MAX
+           and q["title"][0] == "Feedback: Next mission not found" and 0 < n < len(log)
+           and "Settings folder: ~" in q["body"][0] and os.path.expanduser("~") not in q["body"][0],
+           "%d chars, %d log lines" % (len(url), n))
+        fw.top.destroy()
         url, body, headers = build_discord_request(dict(DEFAULT_DISCORD, mode="webhook", url="https://discord.com/api/webhooks/1/x"),
                                                    "hi", {"title": "t"}, b"\x89PNG", True)
         ok("discord message builds", url.endswith("/x") and b"payload_json" in body and "multipart" in headers["Content-Type"])

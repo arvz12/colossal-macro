@@ -12,6 +12,7 @@ Grind macro for **Attack on Titan Revolution** (Roblox), built for Colossal user
 - Reads the result and loot on every end screen; stats, run history, per-step times and an analytics page.
 - Discord webhook / bot (messages, stats graph, remote commands), auto-reconnect, session limits.
 - Works fullscreen or windowed; themes and accent colour.
+- **Feedback** button: report a bug or an idea - it opens a filled-in [issue](../../issues) here (optionally with your activity log, Windows name and links taken out).
 
 ## Builds and skill layouts
 Put your skills on these keys (or change the keys in the app: Settings > Keybinds). Each picture shows the human bar (killing titans) and the bar once you've shifted. For every routine avoid the perks **Adaptation**, **Tatsujin** and **Wings of Freedom**, and the **Flashsteps** memory.
