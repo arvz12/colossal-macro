@@ -4,6 +4,8 @@ Grind macro for **Attack on Titan Revolution** (Roblox), built for Colossal user
 
 **Download:** the exe is on the [Releases](../../releases) page. How to use it: [HOW TO USE.txt](HOW%20TO%20USE.txt) (also inside the app: Guide).
 
+**Discord:** [join the Colossal Macro server](https://discord.gg/j2C5R3QBXk) for updates, help and support tickets.
+
 ## What it does
 - **Build optimiser:** pick Shifter, Thunder Spear or ODM - it reads your perks and memories off the game's menus and shows the best build you can equip, slot by slot, plus the 3 upgrades that would make it strongest.
 - Routines: Blood Awakening (Colossal), Shiki, Universal (thunder spears), Female Raid.
