@@ -96,6 +96,7 @@ FEEDBACK_REPO = "arvz12/colossal-macro"  # Feedback opens a filled-in issue here
 # GitHub keeps a filled-in issue link through its sign-in page only while the link, encoded once more for the
 # login page, stays under about 7600 characters (tested Nov 2026); 6800 leaves room. The log is cut to fit.
 FEEDBACK_URL_MAX = 6800
+DISCORD_INVITE = "https://discord.gg/j2C5R3QBXk"  # the official Colossal Macro server (permanent invite)
 
 
 # =============================================================================
@@ -6013,7 +6014,8 @@ class MiniBar:
 
 ICON_FONT = "Segoe MDL2 Assets"
 NAV_ICONS = {"Dashboard": "\ue80f", "Runs": "\ue81c", "Graph": "\ue9d2", "Loot": "\ue7b8", "Stats": "\ueb05",
-             "Appearance": "\ue790", "Settings": "\ue713", "Guide": "\ue897", "Feedback": "\ue939"}
+             "Appearance": "\ue790", "Settings": "\ue713", "Guide": "\ue897", "Feedback": "\ue939",
+             "Discord": "\ue8f2"}
 NAV_TEXT = {"Graph": "Analytics", "Stats": "All-time stats", "Build": "Your build"}
 NAV_ICONS["Build"] = "\ue8fd"
 NAV_ICONS["Optimiser"] = "\ue735"
@@ -6727,7 +6729,8 @@ class App:
         bottom.pack(side="bottom", fill="x", pady=(0, px(16)))
         label(bottom, "APP", 7, DIM, True, bg=SIDE).pack(anchor="w", padx=px(22), pady=(0, px(6)))
         for key, cmd in (("Appearance", lambda: self.show_tab("Appearance")), ("Settings", self.open_settings),
-                         ("Guide", self.open_guide), ("Feedback", self.open_feedback)):
+                         ("Guide", self.open_guide), ("Feedback", self.open_feedback),
+                         ("Discord", self.open_discord)):
             item = NavItem(bottom, key, cmd, nav_w)
             item.pack(padx=px(14), pady=px(1))
             self.nav[key] = item
@@ -7943,6 +7946,20 @@ class App:
 
     def open_feedback(self):
         FeedbackWindow(self)
+
+    def open_discord(self):
+        """Opens the Colossal Macro Discord invite in the browser (help, updates, support tickets)."""
+        try:
+            opened = webbrowser.open(DISCORD_INVITE)
+        except Exception:
+            opened = False
+        if opened:
+            self.add_log("Opened the Colossal Macro Discord: " + DISCORD_INVITE)
+        else:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(DISCORD_INVITE)
+            self.add_log("Couldn't open your browser - the Discord link is copied, paste it into one: "
+                         + DISCORD_INVITE)
 
     def _all_windows(self):
         wins = [self.root]

@@ -147,6 +147,7 @@ Settings > Reconnect. When Roblox shows its Disconnected message, the failsafe h
 - Keys go to the wrong window: leave "Bring Roblox to the front" on (Settings > App), or click into Roblox after pressing Start.
 - Stuck missions: after 120 seconds the failsafe spams ability 2 (eject), waits, then clicks the screen until the retry button shows up. Change the time or the click spot in Settings > Failsafe. The Female Raid has its own 3 minute limit.
 - Something odd happened: Documents\Colossal Macro\last_session_log.txt has everything the macro did.
+- Ask on Discord: press Discord (bottom of the sidebar) or join https://discord.gg/j2C5R3QBXk - help from the community, updates, and private support tickets.
 - Tell us: press Feedback (bottom of the sidebar), write what happened (or your idea), and press Open on GitHub. It opens a filled-in GitHub issue (app version and routine added) - press Submit new issue there (free GitHub account). Turn on "Attach my activity log" for bugs; your Windows name, links and Discord ids are taken out. GitHub issues are public, so don't write passwords or personal info.
 
 ## Sharing with friends
